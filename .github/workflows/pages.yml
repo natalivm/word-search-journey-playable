@@ -1,0 +1,88 @@
+name: Validate and Deploy Pages
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate playable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate static files
+        run: |
+          test -f index.html
+          test -f playable-ad/index.html
+          test -f .nojekyll
+          grep -q './playable-ad/' index.html
+          grep -q 'com.playvalve.wsjourney' playable-ad/index.html
+
+      - name: Package playable ZIP
+        run: bash scripts/package.sh
+
+      - name: Validate ad ZIP
+        run: |
+          test -f dist/word-search-journey-playable.zip
+          unzip -l dist/word-search-journey-playable.zip | grep -q 'index.html'
+          bytes="$(wc -c < dist/word-search-journey-playable.zip)"
+          max_bytes="$((5 * 1024 * 1024))"
+          if [ "$bytes" -gt "$max_bytes" ]; then
+            echo "Playable ZIP is larger than 5 MB: $bytes bytes"
+            exit 1
+          fi
+
+      - name: Upload playable ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: word-search-journey-playable
+          path: dist/word-search-journey-playable.zip
+
+  deploy:
+    name: Deploy GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package playable ZIP
+        run: bash scripts/package.sh
+
+      - name: Build static site artifact
+        run: |
+          mkdir -p _site
+          cp index.html .nojekyll _site/
+          cp -R playable-ad docs dist artifacts _site/
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
