@@ -170,12 +170,6 @@
       border-radius: 8px;
       background: rgba(255, 250, 240, 0.9);
       box-shadow: var(--shadow);
-      transition: transform 420ms ease, opacity 420ms ease;
-    }
-
-    .board-wrap.clearing {
-      transform: translateY(8px) scale(0.98);
-      opacity: 0.28;
     }
 
     .board {
@@ -229,8 +223,6 @@
       place-items: center;
       border: 1px solid var(--tile-border);
       border-radius: 8px;
-      background: #fff;
-      color: var(--ink);
       font-weight: 950;
       line-height: 1;
       box-shadow: inset 0 -3px 0 rgba(25, 36, 58, 0.08), 0 12px 18px rgba(25, 36, 58, 0.18);
@@ -770,10 +762,10 @@
 
       function clearBoardThenShowEndCard() {
         var boardRect = board.getBoundingClientRect();
-        boardWrap.classList.add("clearing");
 
-        board.querySelectorAll(".cell:not(.found)").forEach(function (cell, index) {
+        board.querySelectorAll(".cell").forEach(function (cell, index) {
           var rect = cell.getBoundingClientRect();
+          var style = window.getComputedStyle(cell);
           var falling = document.createElement("div");
           falling.className = "falling-letter";
           falling.textContent = cell.textContent;
@@ -781,7 +773,10 @@
           falling.style.top = rect.top - boardRect.top + "px";
           falling.style.width = rect.width + "px";
           falling.style.height = rect.height + "px";
-          falling.style.fontSize = window.getComputedStyle(cell).fontSize;
+          falling.style.fontSize = style.fontSize;
+          falling.style.background = style.backgroundColor;
+          falling.style.borderColor = style.borderColor;
+          falling.style.color = style.color;
           falling.style.animationDelay = 26 * index + Math.random() * 90 + "ms";
           falling.style.setProperty("--drift-start", (Math.random() * 18 - 9).toFixed(1) + "px");
           falling.style.setProperty("--drift-end", (Math.random() * 180 - 90).toFixed(1) + "px");
