@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="ad.orientation" content="portrait">
+  <meta name="ad.size" content="width=320,height=480">
+  <title>Word Search Journey Playable</title>
+  <style>
+    :root {
+      --ink: #19243a;
+      --muted: #687086;
+      --paper: #fffaf0;
+      --tile: #ffffff;
+      --tile-border: #dce4e2;
+      --found: #18a999;
+      --selected: #ffd166;
+      --coral: #ff6b6b;
+      --blue: #2364aa;
+      --sky: #b8edf0;
+      --leaf: #2f8f6f;
+      --shadow: 0 16px 32px rgba(25, 36, 58, 0.18);
+      font-family: Inter, ui-rounded, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #9be2e4;
+      color: var(--ink);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      touch-action: none;
+    }
+
+    .ad {
+      position: relative;
+      width: min(100vw, calc(100vh * 9 / 16));
+      height: min(100vh, calc(100vw * 16 / 9));
+      min-width: 300px;
+      min-height: 480px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 14% 10%, #ffe08a 0 12%, transparent 12.5%),
+        linear-gradient(180deg, #9de7ec 0%, #d9f6eb 45%, #fff1c7 100%);
+      box-shadow: var(--shadow);
+    }
+
+    .ad::before {
+      content: "";
+      position: absolute;
+      inset: auto -8% 0 -8%;
+      height: 28%;
+      background:
+        linear-gradient(135deg, transparent 0 28%, rgba(47, 143, 111, 0.92) 28% 42%, transparent 42%),
+        linear-gradient(45deg, transparent 0 36%, rgba(35, 100, 170, 0.2) 36% 52%, transparent 52%),
+        #f7d98a;
+      clip-path: polygon(0 28%, 15% 8%, 31% 30%, 48% 4%, 66% 32%, 83% 12%, 100% 34%, 100% 100%, 0 100%);
+    }
+
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: start;
+      z-index: 2;
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .brand-label {
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 2px 0 0;
+      font-size: clamp(28px, 8vw, 38px);
+      line-height: 0.94;
+      letter-spacing: 0;
+    }
+
+    .level-pill {
+      min-width: 76px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.92);
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--leaf);
+      box-shadow: 0 8px 18px rgba(25, 36, 58, 0.1);
+    }
+
+    .prompt {
+      position: relative;
+      z-index: 2;
+      margin: 12px 0 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(255, 250, 240, 0.88);
+      font-size: clamp(14px, 3.8vw, 17px);
+      font-weight: 800;
+      box-shadow: 0 8px 22px rgba(25, 36, 58, 0.12);
+    }
+
+    .word-row {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .word-chip {
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.84);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      font-size: clamp(13px, 3.5vw, 16px);
+      font-weight: 900;
+      color: var(--blue);
+      box-shadow: 0 6px 14px rgba(25, 36, 58, 0.08);
+      transition: transform 180ms ease, background 180ms ease, color 180ms ease;
+    }
+
+    .word-chip.found {
+      background: var(--found);
+      color: #fff;
+      transform: scale(0.98);
+      text-decoration: line-through;
+      text-decoration-thickness: 3px;
+    }
+
+    .board-wrap {
+      position: relative;
+      z-index: 2;
+      width: min(100%, 430px);
+      margin: 0 auto;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(255, 250, 240, 0.9);
+      box-shadow: var(--shadow);
+    }
+
+    .board {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: clamp(4px, 1.4vw, 7px);
+      aspect-ratio: 1;
+    }
+
+    .cell {
+      position: relative;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--tile-border);
+      border-radius: 8px;
+      background: var(--tile);
+      color: var(--ink);
+      font-size: clamp(18px, 6.2vw, 31px);
+      font-weight: 950;
+      line-height: 1;
+      box-shadow: inset 0 -3px 0 rgba(25, 36, 58, 0.08);
+      transition: transform 110ms ease, background 110ms ease, color 110ms ease, border-color 110ms ease;
+    }
+
+    .cell.selected {
+      background: var(--selected);
+      border-color: #f6a800;
+      transform: scale(1.04);
+    }
+
+    .cell.found {
+      background: var(--found);
+      border-color: #0d8676;
+      color: #fff;
+    }
+
+    .cell.hinted {
+      animation: pulse 920ms ease-in-out infinite;
+    }
+
+    .footer {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .progress {
+      height: 12px;
+      overflow: hidden;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+    }
+
+    .progress span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--coral), var(--selected), var(--found));
+      transition: width 260ms ease;
+    }
+
+    .cta {
+      height: 42px;
+      min-width: 104px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--coral);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 950;
+      box-shadow: 0 10px 18px rgba(255, 107, 107, 0.32);
+      cursor: pointer;
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      top: 44%;
+      z-index: 5;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: #19243a;
+      color: #fff;
+      font-weight: 900;
+      opacity: 0;
+      transform: translate(-50%, 10px) scale(0.96);
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+
+    .end-card {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      place-items: center;
+      padding: 20px;
+      background:
+        linear-gradient(180deg, rgba(157, 231, 236, 0.94), rgba(255, 241, 199, 0.98)),
+        #fff1c7;
+    }
+
+    .end-card.show {
+      display: grid;
+    }
+
+    .end-content {
+      width: min(100%, 360px);
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .app-icon {
+      width: 92px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 22px;
+      background:
+        linear-gradient(135deg, #2364aa 0 36%, #18a999 36% 64%, #ffd166 64% 100%);
+      color: #fff;
+      font-size: 38px;
+      font-weight: 950;
+      box-shadow: 0 18px 32px rgba(25, 36, 58, 0.25);
+    }
+
+    .end-title {
+      margin: 0;
+      font-size: clamp(34px, 10vw, 48px);
+      line-height: 0.92;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+
+    .end-copy {
+      margin: 0;
+      color: #404b63;
+      font-size: clamp(16px, 4.4vw, 20px);
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .big-cta {
+      width: min(100%, 280px);
+      height: 58px;
+      border: 0;
+      border-radius: 8px;
+      background: #ff6b6b;
+      color: #fff;
+      font-size: 20px;
+      font-weight: 950;
+      box-shadow: 0 14px 28px rgba(255, 107, 107, 0.36);
+      cursor: pointer;
+      animation: ctaBeat 1200ms ease-in-out infinite;
+    }
+
+    .confetti {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .confetti i {
+      position: absolute;
+      top: -16px;
+      width: 8px;
+      height: 14px;
+      border-radius: 2px;
+      background: var(--selected);
+      animation: fall 1200ms linear forwards;
+    }
+
+    .loading {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      background: #fffaf0;
+      transition: opacity 260ms ease, visibility 260ms ease;
+    }
+
+    .loading.hide {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .loader {
+      display: grid;
+      gap: 12px;
+      justify-items: center;
+      font-weight: 950;
+      color: var(--blue);
+    }
+
+    .loader-mark {
+      width: 52px;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      background: var(--blue);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 28px;
+      animation: flip 900ms ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+
+    @keyframes ctaBeat {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.045); }
+    }
+
+    @keyframes fall {
+      to {
+        transform: translateY(115vh) rotate(540deg);
+      }
+    }
+
+    @keyframes flip {
+      from { transform: rotate(-5deg); }
+      to { transform: rotate(5deg) scale(1.06); }
+    }
+
+    @media (max-height: 560px) {
+      .screen {
+        padding-top: 12px;
+        padding-bottom: 12px;
+      }
+
+      .prompt {
+        margin: 8px 0;
+        padding: 8px 10px;
+      }
+
+      .word-row {
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      .word-chip {
+        height: 28px;
+      }
+
+      .footer {
+        margin-top: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="ad" aria-label="Word Search Journey playable ad">
+    <section class="screen" id="gameScreen">
+      <header class="hud">
+        <div class="brand">
+          <div class="brand-label">Playable level</div>
+          <h1>Word Search Journey</h1>
+        </div>
+        <div class="level-pill">Coast<br>Trip</div>
+      </header>
+
+      <div class="prompt" id="prompt">Drag across letters to find SUNNY</div>
+
+      <div class="word-row" id="wordRow"></div>
+
+      <div class="board-wrap">
+        <div class="board" id="board" aria-label="Word search board"></div>
+      </div>
+
+      <footer class="footer">
+        <div class="progress" aria-label="Level progress"><span id="progressBar"></span></div>
+        <button class="cta" type="button" id="smallCta">Install</button>
+      </footer>
+    </section>
+
+    <div class="toast" id="toast">Found!</div>
+    <div class="confetti" id="confetti"></div>
+
+    <section class="end-card" id="endCard" aria-label="Install Word Search Journey">
+      <div class="end-content">
+        <div class="app-icon">W</div>
+        <h2 class="end-title">Journey Complete!</h2>
+        <p class="end-copy">Play thousands of relaxing word search levels.</p>
+        <button class="big-cta" type="button" id="bigCta">Play Free</button>
+      </div>
+    </section>
+
+    <div class="loading" id="loading">
+      <div class="loader">
+        <div class="loader-mark">W</div>
+        <div>Loading level...</div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      var ANDROID_URL = "https://play.google.com/store/apps/details?id=com.playvalve.wsjourney&hl=en";
+      var IOS_URL = "https://apps.apple.com/us/app/word-search-journey-puzzle/id1549726220";
+
+      var rows = [
+        "SUNNYXLM",
+        "AQRTPEAR",
+        "NBEACHKO",
+        "DLOPRNEC",
+        "TRIPAVOE",
+        "WCSMILEA",
+        "OASISPRN",
+        "RYGEMSUN"
+      ];
+
+      var words = [
+        { text: "SUNNY", hint: "Drag across letters to find SUNNY" },
+        { text: "BEACH", hint: "Nice! Now find BEACH" },
+        { text: "TRIP", hint: "Two left. Find TRIP" },
+        { text: "SMILE", hint: "Last one: SMILE" }
+      ];
+
+      var board = document.getElementById("board");
+      var wordRow = document.getElementById("wordRow");
+      var prompt = document.getElementById("prompt");
+      var toast = document.getElementById("toast");
+      var progressBar = document.getElementById("progressBar");
+      var endCard = document.getElementById("endCard");
+      var confetti = document.getElementById("confetti");
+      var loading = document.getElementById("loading");
+      var found = Object.create(null);
+      var foundCount = 0;
+      var isSelecting = false;
+      var startCell = null;
+      var selectedCells = [];
+      var touchedOnce = false;
+
+      function makeCell(letter, row, col) {
+        var cell = document.createElement("div");
+        cell.className = "cell";
+        cell.textContent = letter;
+        cell.dataset.row = row;
+        cell.dataset.col = col;
+        cell.dataset.index = row + "-" + col;
+        return cell;
+      }
+
+      function render() {
+        rows.forEach(function (line, row) {
+          line.split("").forEach(function (letter, col) {
+            board.appendChild(makeCell(letter, row, col));
+          });
+        });
+
+        words.forEach(function (word) {
+          var chip = document.createElement("div");
+          chip.className = "word-chip";
+          chip.textContent = word.text;
+          chip.dataset.word = word.text;
+          wordRow.appendChild(chip);
+        });
+
+        setTimeout(function () {
+          loading.classList.add("hide");
+          hintWord(words[0].text);
+        }, 420);
+      }
+
+      function getCell(row, col) {
+        return board.querySelector('[data-index="' + row + "-" + col + '"]');
+      }
+
+      function cellFromPoint(event) {
+        var point = event.touches ? event.touches[0] : event;
+        var el = document.elementFromPoint(point.clientX, point.clientY);
+        return el && el.classList && el.classList.contains("cell") ? el : null;
+      }
+
+      function pathBetween(start, end) {
+        var sr = Number(start.dataset.row);
+        var sc = Number(start.dataset.col);
+        var er = Number(end.dataset.row);
+        var ec = Number(end.dataset.col);
+        var dr = er - sr;
+        var dc = ec - sc;
+        var absR = Math.abs(dr);
+        var absC = Math.abs(dc);
+
+        if (!(dr === 0 || dc === 0 || absR === absC)) {
+          return [];
+        }
+
+        var stepR = dr === 0 ? 0 : dr / absR;
+        var stepC = dc === 0 ? 0 : dc / absC;
+        var length = Math.max(absR, absC);
+        var path = [];
+
+        for (var i = 0; i <= length; i += 1) {
+          path.push(getCell(sr + stepR * i, sc + stepC * i));
+        }
+
+        return path.filter(Boolean);
+      }
+
+      function clearSelection() {
+        selectedCells.forEach(function (cell) {
+          cell.classList.remove("selected");
+        });
+        selectedCells = [];
+      }
+
+      function selectPath(path) {
+        clearSelection();
+        selectedCells = path;
+        selectedCells.forEach(function (cell) {
+          cell.classList.add("selected");
+        });
+      }
+
+      function selectedText() {
+        return selectedCells.map(function (cell) {
+          return cell.textContent;
+        }).join("");
+      }
+
+      function reverseText(text) {
+        return text.split("").reverse().join("");
+      }
+
+      function findWord(text) {
+        return words.find(function (word) {
+          return word.text === text || word.text === reverseText(text);
+        });
+      }
+
+      function markFound(word) {
+        found[word.text] = true;
+        foundCount += 1;
+        selectedCells.forEach(function (cell) {
+          cell.classList.add("found");
+          cell.classList.remove("selected", "hinted");
+        });
+
+        var chip = wordRow.querySelector('[data-word="' + word.text + '"]');
+        if (chip) chip.classList.add("found");
+
+        progressBar.style.width = Math.round((foundCount / words.length) * 100) + "%";
+        showToast(word.text + " found!");
+
+        if (foundCount === words.length) {
+          prompt.textContent = "Perfect! You completed the level";
+          setTimeout(showEndCard, 520);
+          return;
+        }
+
+        var next = words.find(function (item) {
+          return !found[item.text];
+        });
+        if (next) {
+          prompt.textContent = next.hint;
+          setTimeout(function () {
+            hintWord(next.text);
+          }, 420);
+        }
+      }
+
+      function showToast(text) {
+        toast.textContent = text;
+        toast.classList.add("show");
+        setTimeout(function () {
+          toast.classList.remove("show");
+        }, 720);
+      }
+
+      function hintWord(wordText) {
+        if (touchedOnce) return;
+        board.querySelectorAll(".hinted").forEach(function (cell) {
+          cell.classList.remove("hinted");
+        });
+
+        var first = wordText[0];
+        board.querySelectorAll(".cell").forEach(function (cell) {
+          if (cell.textContent === first && !cell.classList.contains("found")) {
+            cell.classList.add("hinted");
+          }
+        });
+      }
+
+      function pointerStart(event) {
+        var cell = cellFromPoint(event);
+        if (!cell) return;
+        touchedOnce = true;
+        board.querySelectorAll(".hinted").forEach(function (hinted) {
+          hinted.classList.remove("hinted");
+        });
+        isSelecting = true;
+        startCell = cell;
+        selectPath([cell]);
+      }
+
+      function pointerMove(event) {
+        if (!isSelecting || !startCell) return;
+        var cell = cellFromPoint(event);
+        if (!cell) return;
+        var path = pathBetween(startCell, cell);
+        if (path.length) selectPath(path);
+      }
+
+      function pointerEnd() {
+        if (!isSelecting) return;
+        isSelecting = false;
+
+        var text = selectedText();
+        var word = findWord(text);
+
+        if (word && !found[word.text]) {
+          markFound(word);
+          selectedCells = [];
+        } else {
+          if (selectedCells.length > 1) showToast("Try another line");
+          clearSelection();
+        }
+
+        startCell = null;
+      }
+
+      function showEndCard() {
+        endCard.classList.add("show");
+        burstConfetti();
+      }
+
+      function burstConfetti() {
+        confetti.innerHTML = "";
+        var colors = ["#ff6b6b", "#ffd166", "#18a999", "#2364aa", "#ffffff"];
+        for (var i = 0; i < 42; i += 1) {
+          var piece = document.createElement("i");
+          piece.style.left = Math.random() * 100 + "%";
+          piece.style.background = colors[i % colors.length];
+          piece.style.animationDelay = Math.random() * 280 + "ms";
+          piece.style.animationDuration = 900 + Math.random() * 800 + "ms";
+          confetti.appendChild(piece);
+        }
+      }
+
+      function storeUrl() {
+        var ua = navigator.userAgent || "";
+        return /android/i.test(ua) ? ANDROID_URL : IOS_URL;
+      }
+
+      function openStore() {
+        var url = storeUrl();
+        try {
+          if (window.mraid && typeof window.mraid.open === "function") {
+            window.mraid.open(url);
+            return;
+          }
+
+          if (window.ExitApi && typeof window.ExitApi.exit === "function") {
+            window.ExitApi.exit();
+            return;
+          }
+        } catch (error) {
+          // Fall through to browser navigation in preview environments.
+        }
+
+        window.open(url, "_blank");
+      }
+
+      board.addEventListener("pointerdown", pointerStart);
+      board.addEventListener("pointermove", pointerMove);
+      window.addEventListener("pointerup", pointerEnd);
+      window.addEventListener("pointercancel", pointerEnd);
+      document.getElementById("smallCta").addEventListener("click", openStore);
+      document.getElementById("bigCta").addEventListener("click", openStore);
+
+      render();
+    }());
+  </script>
+</body>
+</html>
