@@ -35,7 +35,7 @@
   --pool-shallow: #185a7e;
   --pool-deep: #0a2135;
   --pool-glow: #8fdcf5;
-  --pool-caustic-strength: 0.7;
+  --pool-caustic-strength: 0.82;
 }
 
 /* The gradient the shader replaces — and what is on screen for the frame
