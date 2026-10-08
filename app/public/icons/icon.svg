@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Word Search Journey">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9de7ec"/>
+      <stop offset="0.55" stop-color="#d9f6eb"/>
+      <stop offset="1" stop-color="#fff1c7"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f3f7f5"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#sky)"/>
+
+  <!-- Horizon, echoing the in-game background -->
+  <path d="M0 362 L78 316 L160 366 L246 306 L330 370 L414 322 L512 374 L512 512 L0 512 Z" fill="#f7d98a"/>
+  <path d="M78 316 L160 366 L246 306 L246 512 L96 512 Z" fill="#2f8f6f" opacity="0.92"/>
+  <circle cx="110" cy="112" r="52" fill="#ffe08a"/>
+
+  <!-- Letter tiles spelling the found-word diagonal -->
+  <g>
+    <rect x="96" y="150" width="96" height="96" rx="20" fill="url(#tile)" stroke="#dce4e2" stroke-width="5"/>
+    <rect x="208" y="150" width="96" height="96" rx="20" fill="url(#tile)" stroke="#dce4e2" stroke-width="5"/>
+    <rect x="320" y="150" width="96" height="96" rx="20" fill="url(#tile)" stroke="#dce4e2" stroke-width="5"/>
+    <rect x="96" y="262" width="96" height="96" rx="20" fill="url(#tile)" stroke="#dce4e2" stroke-width="5"/>
+    <rect x="208" y="262" width="96" height="96" rx="20" fill="url(#tile)" stroke="#dce4e2" stroke-width="5"/>
+    <rect x="320" y="262" width="96" height="96" rx="20" fill="url(#tile)" stroke="#dce4e2" stroke-width="5"/>
+  </g>
+
+  <!-- The highlight capsule, drawn behind the letters -->
+  <line x1="144" y1="198" x2="368" y2="310" stroke="#ff6b6b" stroke-width="84" stroke-linecap="round" opacity="0.9"/>
+
+  <g fill="#ffffff" font-family="ui-rounded, system-ui, -apple-system, Segoe UI, sans-serif" font-size="68" font-weight="900" text-anchor="middle">
+    <text x="144" y="222">W</text>
+    <text x="256" y="222">O</text>
+  </g>
+  <g fill="#19243a" font-family="ui-rounded, system-ui, -apple-system, Segoe UI, sans-serif" font-size="68" font-weight="900" text-anchor="middle">
+    <text x="368" y="222">A</text>
+    <text x="144" y="334">N</text>
+  </g>
+  <g fill="#ffffff" font-family="ui-rounded, system-ui, -apple-system, Segoe UI, sans-serif" font-size="68" font-weight="900" text-anchor="middle">
+    <text x="256" y="334">R</text>
+    <text x="368" y="334">D</text>
+  </g>
+</svg>

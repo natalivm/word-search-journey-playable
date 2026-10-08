@@ -18,29 +18,63 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate playable
+    name: Validate
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate static files
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Generate every level and verify the puzzles are solvable
+        run: npm run verify
+
+      - name: Build the game
+        run: npm run build
+
+      - name: Validate landing page and ad creative
         run: |
           test -f index.html
           test -f playable-ad/index.html
           test -f .nojekyll
           grep -q './playable-ad/' index.html
+          grep -q './game/' index.html
           grep -q 'com.playvalve.wsjourney' playable-ad/index.html
+
+      - name: Validate build output
+        run: |
+          test -f dist/index.html
+          test -f dist/manifest.webmanifest
+          test -f dist/sw.js
+          test -f dist/icons/icon-192.png
+          test -f dist/icons/icon-512.png
+          test -f dist/icons/icon-maskable-512.png
+          node -e "JSON.parse(require('fs').readFileSync('dist/manifest.webmanifest','utf8'))"
+
+      # Pages serves this repo from /<repo>/, so an absolute asset path works
+      # locally and 404s in production. This catches that before deploying.
+      - name: Check GitHub Pages path compatibility
+        run: npm run check:pages
 
       - name: Package playable ZIP
         run: bash scripts/package.sh
 
       - name: Validate ad ZIP
         run: |
-          test -f dist/word-search-journey-playable.zip
-          unzip -l dist/word-search-journey-playable.zip | grep -q 'index.html'
-          bytes="$(wc -c < dist/word-search-journey-playable.zip)"
+          test -f dist-ad/word-search-journey-playable.zip
+          unzip -l dist-ad/word-search-journey-playable.zip | grep -q 'index.html'
+          bytes="$(wc -c < dist-ad/word-search-journey-playable.zip)"
           max_bytes="$((5 * 1024 * 1024))"
           if [ "$bytes" -gt "$max_bytes" ]; then
             echo "Playable ZIP is larger than 5 MB: $bytes bytes"
@@ -51,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: word-search-journey-playable
-          path: dist/word-search-journey-playable.zip
+          path: dist-ad/word-search-journey-playable.zip
 
   deploy:
     name: Deploy GitHub Pages
@@ -66,14 +100,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the game
+        run: npm run build
+
       - name: Package playable ZIP
         run: bash scripts/package.sh
 
-      - name: Build static site artifact
+      - name: Assemble the site
         run: |
           mkdir -p _site
           cp index.html .nojekyll _site/
-          cp -R playable-ad docs dist artifacts _site/
+          cp -R playable-ad docs artifacts _site/
+          cp -R dist _site/game
+          cp -R dist-ad _site/dist
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

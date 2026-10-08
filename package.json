@@ -1,0 +1,29 @@
+{
+  "name": "word-search-journey",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Word Search Journey \u2014 a mobile word search game with 80 levels, daily puzzles and offline play.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/write-sw-manifest.mjs",
+    "preview": "vite preview",
+    "verify": "node scripts/verify-levels.mjs",
+    "lint": "eslint app/src scripts vite.config.js app/public/sw.js",
+    "check": "npm run lint && npm run verify && npm run build && npm run check:pages",
+    "check:pages": "node scripts/check-pages.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@vitejs/plugin-react": "5.1.0",
+    "eslint": "9.39.1",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "vite": "7.3.7"
+  }
+}

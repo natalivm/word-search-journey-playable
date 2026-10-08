@@ -1,0 +1,198 @@
+/* Design tokens: colour, type, spacing, motion.
+   Every surface colour is themed so the whole app flips with [data-theme]. */
+
+:root {
+  color-scheme: light;
+
+  /* --- Brand ramp ------------------------------------------------------ */
+  --sky-100: #eafafb;
+  --sky-200: #c6f0f3;
+  --sky-300: #9de7ec;
+  --sky-500: #4fc3cd;
+  --sand-100: #fff6dd;
+  --sand-300: #ffe08a;
+  --sand-500: #f6c453;
+  --coral-400: #ff8a8a;
+  --coral-500: #ff6b6b;
+  --coral-600: #e24d4d;
+  --teal-500: #18a999;
+  --teal-600: #0d8676;
+  --blue-500: #2364aa;
+  --blue-600: #1a4d85;
+  --leaf-500: #2f8f6f;
+  --violet-500: #7c5cde;
+
+  /* --- Semantic surfaces ----------------------------------------------- */
+  --bg: #9de7ec;
+  --bg-grad: linear-gradient(180deg, #9de7ec 0%, #d9f6eb 46%, #fff1c7 100%);
+  --surface: #fffaf0;
+  --surface-2: #ffffff;
+  --surface-sunk: #f1efe6;
+  --surface-translucent: rgba(255, 255, 255, 0.82);
+  --surface-scrim: rgba(25, 36, 58, 0.52);
+
+  --ink: #19243a;
+  --ink-soft: #404b63;
+  --ink-muted: #6b7590;
+  --ink-invert: #ffffff;
+
+  --line: #dce4e2;
+  --line-strong: #c3cfcc;
+
+  --accent: var(--coral-500);
+  --accent-ink: #ffffff;
+  --accent-shadow: rgba(255, 107, 107, 0.34);
+  --good: var(--teal-500);
+  --warn: #e8911c;
+  --lock: #9aa4b8;
+
+  /* Tile colours for the puzzle board */
+  --tile: #ffffff;
+  --tile-line: #dce4e2;
+  --tile-ink: #19243a;
+  --tile-shade: rgba(25, 36, 58, 0.09);
+
+  /* --- Elevation -------------------------------------------------------- */
+  --shadow-sm: 0 2px 6px rgba(25, 36, 58, 0.08);
+  --shadow-md: 0 8px 18px rgba(25, 36, 58, 0.12);
+  --shadow-lg: 0 16px 32px rgba(25, 36, 58, 0.18);
+  --shadow-xl: 0 24px 54px rgba(25, 36, 58, 0.26);
+
+  /* --- Radii ------------------------------------------------------------ */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 30px;
+  --r-pill: 999px;
+
+  /* --- Spacing ---------------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 22px;
+  --sp-6: 30px;
+  --sp-7: 40px;
+
+  /* --- Type ------------------------------------------------------------- */
+  --font: "Nunito", ui-rounded, "SF Pro Rounded", system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --fw-regular: 600;
+  --fw-bold: 800;
+  --fw-black: 900;
+
+  /* --- Motion ----------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.22, 0.82, 0.3, 1);
+  --ease-spring: cubic-bezier(0.18, 0.95, 0.24, 1.08);
+  --dur-fast: 120ms;
+  --dur-mid: 240ms;
+  --dur-slow: 420ms;
+
+  /* --- Layout ----------------------------------------------------------- */
+  --app-max: 520px;
+  --tap-min: 44px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* --- Word highlight palette (set by settings.js) ---------------------- */
+  --w1: #ff6b6b;
+  --w2: #2364aa;
+  --w3: #18a999;
+  --w4: #f6a800;
+  --w5: #7c5cde;
+  --w6: #e8559a;
+  --w7: #2f8f6f;
+  --w8: #ef7a2b;
+  --w9: #3aa0d8;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Dark theme                                                              */
+/* ---------------------------------------------------------------------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #141c2e;
+  --bg-grad: linear-gradient(180deg, #16203a 0%, #15293a 48%, #1c2b36 100%);
+  --surface: #1e293f;
+  --surface-2: #26324c;
+  --surface-sunk: #172033;
+  --surface-translucent: rgba(38, 50, 76, 0.86);
+  --surface-scrim: rgba(6, 10, 20, 0.66);
+
+  --ink: #f2f6ff;
+  --ink-soft: #c6d0e6;
+  --ink-muted: #8e9ab6;
+  --ink-invert: #0f1726;
+
+  --line: #35425f;
+  --line-strong: #46557a;
+
+  --accent: #ff7b7b;
+  --accent-shadow: rgba(255, 107, 107, 0.26);
+  --good: #2fc9b6;
+  --lock: #5c6782;
+
+  --tile: #2b3752;
+  --tile-line: #3c4a6b;
+  --tile-ink: #f4f7ff;
+  --tile-shade: rgba(0, 0, 0, 0.28);
+
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.36);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.44);
+  --shadow-xl: 0 24px 54px rgba(0, 0, 0, 0.56);
+
+  --w1: #ff7f7f;
+  --w2: #5b9be0;
+  --w3: #2fc9b6;
+  --w4: #ffc14d;
+  --w5: #a98cf5;
+  --w6: #ff7fbe;
+  --w7: #52c396;
+  --w8: #ff9a57;
+  --w9: #62bdf0;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Colour-blind friendly word palette (Okabe-Ito derived, high separation) */
+/* ---------------------------------------------------------------------- */
+[data-cvd="on"] {
+  --w1: #d55e00;
+  --w2: #0072b2;
+  --w3: #009e73;
+  --w4: #e69f00;
+  --w5: #cc79a7;
+  --w6: #56b4e9;
+  --w7: #6a4c93;
+  --w8: #b04a1f;
+  --w9: #00707a;
+}
+
+[data-theme="dark"][data-cvd="on"] {
+  --w1: #ff8c3d;
+  --w2: #4aa3e0;
+  --w3: #2fc9a0;
+  --w4: #ffc44d;
+  --w5: #ef9ac4;
+  --w6: #7fcdf5;
+  --w7: #a98cf5;
+  --w8: #ff9f6b;
+  --w9: #35b3bd;
+}
+
+/* High-contrast board: stronger tile borders and darker letters. */
+[data-contrast="high"] {
+  --tile-line: #19243a;
+  --line: #19243a;
+  --ink-muted: #3c475f;
+}
+
+[data-theme="dark"][data-contrast="high"] {
+  --tile-line: #ffffff;
+  --line: #a9b6d4;
+  --ink-muted: #d3dcf0;
+}

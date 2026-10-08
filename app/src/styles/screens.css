@@ -1,0 +1,894 @@
+/* Home, map, profile and settings. */
+
+.section-title {
+  margin: var(--sp-5) 0 var(--sp-2);
+  font-size: 13px;
+  font-weight: var(--fw-black);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+}
+
+.section-title:first-child {
+  margin-top: 0;
+}
+
+.section-title small {
+  color: var(--ink-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ====================================================================== */
+/* Home                                                                    */
+/* ====================================================================== */
+
+.home-top {
+  display: grid;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.player-strip {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-lg);
+  background: var(--surface-translucent);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  color: var(--ink-muted);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.player-strip:active {
+  transform: scale(0.985);
+}
+
+.home-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  font-size: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.player-strip-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.player-strip-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.player-strip-row b {
+  font-size: 15px;
+  font-weight: var(--fw-black);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-strip-row span {
+  flex: none;
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+}
+
+.player-strip-main small {
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+}
+
+.home-wallet {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.home-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-4);
+}
+
+.home-hero {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  margin-top: auto;
+  text-align: center;
+}
+
+.home-mark {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, var(--blue-500) 0 36%, var(--teal-500) 36% 64%, var(--sand-300) 64%);
+  color: #fff;
+  font-size: 36px;
+  font-weight: var(--fw-black);
+  box-shadow: var(--shadow-lg);
+}
+
+.home-title {
+  max-width: 7ch;
+  font-size: clamp(32px, 9vw, 42px);
+  font-weight: var(--fw-black);
+  line-height: 0.95;
+  letter-spacing: -0.5px;
+}
+
+.home-sub {
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: var(--fw-bold);
+}
+
+.home-play {
+  flex: none;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-2);
+  margin-bottom: auto;
+}
+
+.tile-btn {
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 2px;
+  min-height: 84px;
+  padding: var(--sp-3);
+  border-radius: var(--r-lg);
+  background: var(--surface-translucent);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-mid) var(--ease-spring);
+}
+
+.tile-btn:active {
+  transform: scale(0.95);
+  transition-duration: 60ms;
+}
+
+.tile-btn svg {
+  margin-bottom: 2px;
+  color: var(--blue-500);
+}
+
+[data-theme="dark"] .tile-btn svg {
+  color: var(--sky-300);
+}
+
+.tile-btn b {
+  font-size: 15px;
+  font-weight: var(--fw-black);
+}
+
+.tile-btn small {
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+}
+
+.tile-btn--daily {
+  background: linear-gradient(135deg, var(--sand-300), var(--sand-500));
+  color: #4a3100;
+}
+
+.tile-btn--daily svg,
+.tile-btn--daily small {
+  color: #6b4a06;
+}
+
+.tile-btn--daily.is-done {
+  background: var(--surface-translucent);
+  color: var(--ink);
+}
+
+.tile-btn--daily.is-done svg {
+  color: var(--good);
+}
+
+.tile-btn--daily.is-done small {
+  color: var(--ink-muted);
+}
+
+.home-footnote {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: var(--fw-bold);
+}
+
+/* ====================================================================== */
+/* Map                                                                     */
+/* ====================================================================== */
+
+.map-body {
+  display: grid;
+  gap: var(--sp-5);
+  padding-bottom: var(--sp-6);
+}
+
+.chapter-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--r-lg);
+  background: var(--surface-translucent);
+  box-shadow: var(--shadow-sm);
+}
+
+.chapter-head.is-locked {
+  opacity: 0.55;
+}
+
+.chapter-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  font-size: 23px;
+  box-shadow: var(--shadow-sm);
+}
+
+.chapter-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chapter-meta b {
+  font-size: 15px;
+  font-weight: var(--fw-black);
+}
+
+.chapter-meta small {
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+}
+
+.chapter-score {
+  display: grid;
+  justify-items: center;
+  color: var(--sand-500);
+}
+
+.chapter-score b {
+  font-size: 18px;
+  font-weight: var(--fw-black);
+}
+
+.chapter-score small {
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+}
+
+/* The winding path: nodes lean alternately left and right, joined by a
+   dashed spine drawn behind them. */
+.chapter-path {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-4) 0;
+}
+
+/* The trail is drawn from the real node positions (see map.js) so it stays
+   joined up whatever the node size or lean works out to. */
+.path-line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.path-line polyline {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 2 14;
+  opacity: 0.75;
+}
+
+.node {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 2px;
+  width: 62px;
+  height: 62px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  transform: translateX(calc(var(--lean, 0) * 58px));
+  transition:
+    transform var(--dur-mid) var(--ease-spring),
+    background var(--dur-mid) var(--ease-out);
+  /* Nodes arrive down the trail, so the path reads as a route being walked. */
+  animation: nodeIn 480ms var(--ease-spring) backwards;
+  animation-delay: calc(var(--step, 0) * 45ms);
+}
+
+@keyframes nodeIn {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--lean, 0) * 58px)) scale(0.4) translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(calc(var(--lean, 0) * 58px));
+  }
+}
+
+.node:active {
+  transform: translateX(calc(var(--lean, 0) * 58px)) scale(0.9);
+  transition-duration: 60ms;
+}
+
+.node-num {
+  font-size: 19px;
+  font-weight: var(--fw-black);
+  line-height: 1;
+}
+
+/* On a coloured node the unearned stars should recede, not read as earned. */
+.node.is-next .stars svg,
+.node.is-done .stars svg {
+  fill: rgba(255, 255, 255, 0.38);
+}
+
+.node.is-next .stars svg.on,
+.node.is-done .stars svg.on {
+  fill: #fff;
+}
+
+.node.is-done {
+  background: linear-gradient(160deg, var(--teal-500), var(--leaf-500));
+  color: #fff;
+}
+
+.node.is-locked {
+  background: var(--surface-sunk);
+  color: var(--lock);
+  box-shadow: inset 0 0 0 2px var(--line);
+  cursor: not-allowed;
+}
+
+.node.is-locked,
+.chapter-path .node {
+  z-index: 1;
+}
+
+.node-lock {
+  font-size: 14px;
+  filter: grayscale(1);
+  opacity: 0.85;
+}
+
+/* The next playable level gets a pulsing ring — the only thing on the map
+   competing for attention. */
+/* The "you are here" cue must never move the tap target: a button that is
+   still drifting when a thumb arrives is harder to hit, and assistive and
+   automation tooling both treat a never-settling element as unclickable.
+   So the emphasis is carried by the glow and the ring, not by position. */
+.node.is-next {
+  background: var(--accent);
+  color: #fff;
+  /* A real shadow, not one that only exists inside the keyframes: under
+     reduced motion the animation is suppressed and the node would otherwise
+     lose its accent glow entirely. */
+  box-shadow: 0 10px 22px var(--accent-shadow);
+  /* Repeating the delay keeps this node in the trail's arrival stagger — the
+     `animation` shorthand resets animation-delay inherited from .node. */
+  animation: nodeIn 480ms var(--ease-spring) calc(var(--step, 0) * 45ms) backwards;
+}
+
+/* The pulse rides on the ring (see .node-ping), which animates opacity and
+   transform only. Nothing here animates the node's own box, so the tap
+   target stays exactly where a thumb expects it. */
+
+.node-ping {
+  position: absolute;
+  inset: -5px;
+  border: 3px solid var(--accent);
+  border-radius: var(--r-lg);
+  opacity: 0;
+}
+
+/* Inactive screens are hidden, not removed, so scope the loop to the one
+   screen that can actually be seen. */
+.screen.is-active .node-ping {
+  animation: ping 1.8s var(--ease-out) infinite;
+}
+
+@keyframes ping {
+  0% { transform: scale(0.9); opacity: 0.85; }
+  70%, 100% { transform: scale(1.3); opacity: 0; }
+}
+
+/* ====================================================================== */
+/* Profile                                                                 */
+/* ====================================================================== */
+
+.profile-body {
+  padding-bottom: var(--sp-6);
+}
+
+.profile-card {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  text-align: center;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 82px;
+  height: 82px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(160deg, var(--sky-200), var(--sand-100));
+  font-size: 44px;
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .profile-avatar {
+  background: linear-gradient(160deg, var(--surface-2), var(--surface-sunk));
+}
+
+.profile-name {
+  width: min(100%, 260px);
+  padding: 8px 12px;
+  border: 2px dashed var(--line);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: var(--fw-black);
+  text-align: center;
+}
+
+.profile-name:focus {
+  border-style: solid;
+  border-color: var(--blue-500);
+  outline: none;
+}
+
+.profile-rank {
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: var(--fw-bold);
+}
+
+.profile-card .bar {
+  width: min(100%, 260px);
+}
+
+.profile-xp {
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+}
+
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: var(--sp-2);
+}
+
+.avatar-opt {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-height: var(--tap-min);
+  border-radius: var(--r-md);
+  background: var(--surface-translucent);
+  font-size: 26px;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-mid) var(--ease-spring), box-shadow var(--dur-mid) var(--ease-out);
+}
+
+.avatar-opt:active {
+  transform: scale(0.84);
+  transition-duration: 60ms;
+}
+
+.avatar-opt.is-on {
+  animation: avatarPick 420ms var(--ease-spring);
+}
+
+@keyframes avatarPick {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22) rotate(-6deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.avatar-opt.is-on {
+  background: var(--surface-2);
+  box-shadow: 0 0 0 3px var(--teal-500), var(--shadow-md);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: var(--sp-2);
+}
+
+.stat {
+  display: grid;
+  gap: 2px;
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--surface-translucent);
+  box-shadow: var(--shadow-sm);
+}
+
+.stat b {
+  font-size: 19px;
+  font-weight: var(--fw-black);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat small {
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-grid {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.badge {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--surface-translucent);
+  box-shadow: var(--shadow-sm);
+  opacity: 0.72;
+}
+
+.badge.is-on {
+  opacity: 1;
+  background: var(--surface-2);
+  box-shadow: 0 0 0 2px var(--sand-500), var(--shadow-sm);
+}
+
+.badge-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-sm);
+  background: var(--surface-sunk);
+  font-size: 23px;
+}
+
+.badge.is-on .badge-icon {
+  background: var(--sand-100);
+}
+
+[data-theme="dark"] .badge.is-on .badge-icon {
+  background: var(--surface-sunk);
+}
+
+.badge-meta {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.badge-meta b {
+  font-size: 14px;
+  font-weight: var(--fw-black);
+}
+
+.badge-meta small {
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+}
+
+.bar--thin {
+  height: 6px;
+}
+
+.badge-prog {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ====================================================================== */
+/* Settings                                                                */
+/* ====================================================================== */
+
+.settings-body {
+  padding-bottom: var(--sp-6);
+}
+
+.set-group {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--line);
+  box-shadow: var(--shadow-sm);
+}
+
+.set-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 58px;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.set-row:active {
+  background: var(--surface-sunk);
+}
+
+.set-row--static:active {
+  background: var(--surface);
+}
+
+.set-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.set-text b {
+  font-size: 15px;
+  font-weight: var(--fw-black);
+}
+
+.set-text small {
+  font-size: 11.5px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+  line-height: 1.3;
+}
+
+.set-row--danger .set-text b {
+  color: var(--coral-600);
+}
+
+[data-theme="dark"] .set-row--danger .set-text b {
+  color: var(--coral-400);
+}
+
+.set-chevron {
+  font-size: 22px;
+  color: var(--ink-muted);
+}
+
+/* Switch */
+.switch {
+  position: relative;
+  display: block;
+  width: 50px;
+  height: 30px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  transition: background var(--dur-mid) var(--ease-out);
+}
+
+.switch i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--dur-mid) var(--ease-spring),
+    width var(--dur-fast) var(--ease-out);
+}
+
+/* The knob stretches as it travels, the way a physical switch would.
+   Both rules must key off the row: :active matches the pressed element and
+   its ancestors, never its descendants, so `.switch:active` never fires and
+   an "on" knob would stretch without being pulled back — 3 + 20 + 30 = 53px
+   of knob in a 50px track. */
+.set-row:active .switch i {
+  width: 30px;
+}
+
+.set-row:active .switch.is-on i {
+  transform: translateX(14px);
+}
+
+.switch.is-on {
+  background: var(--teal-500);
+}
+
+.switch.is-on i {
+  transform: translateX(20px);
+}
+
+/* Segmented control */
+.segment {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-sm);
+  background: var(--surface-sunk);
+}
+
+.segment-opt {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: var(--fw-black);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.segment-opt.is-on {
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ====================================================================== */
+/* Install prompt                                                          */
+/* ====================================================================== */
+
+#installBar {
+  position: absolute;
+  left: var(--sp-3);
+  right: var(--sp-3);
+  bottom: calc(var(--safe-bottom) + var(--sp-3));
+  z-index: 55;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-xl);
+  animation: slideUp var(--dur-slow) var(--ease-spring);
+}
+
+#installBar p {
+  font-size: 13px;
+  font-weight: var(--fw-black);
+}
+
+#installBar small {
+  display: block;
+  font-size: 11px;
+  font-weight: var(--fw-bold);
+  color: var(--ink-muted);
+}
+
+#installBar button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: var(--fw-black);
+}
+
+#installBar button[data-act="install"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+#installBar button[data-act="dismiss"] {
+  color: var(--ink-muted);
+  padding: 0 8px;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* ====================================================================== */
+/* Short screens — tighten the home layout so nothing is cut off.          */
+/* ====================================================================== */
+
+@media (max-height: 680px) {
+  .home-mark {
+    width: 56px;
+    height: 56px;
+    font-size: 27px;
+  }
+
+  .home-title {
+    font-size: clamp(26px, 7.5vw, 34px);
+  }
+
+  .tile-btn {
+    min-height: 72px;
+  }
+}
+
+/* How-to-play sheet */
+.howto {
+  display: grid;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.howto-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: var(--sp-3);
+}
+
+.howto-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--surface-sunk);
+  font-size: 18px;
+}
+
+.howto-row p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: var(--fw-bold);
+  line-height: 1.35;
+}
