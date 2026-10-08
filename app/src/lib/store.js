@@ -6,6 +6,7 @@
  * debounced because the play screen touches stats on every found word.
  */
 
+import { useSyncExternalStore } from "react";
 import { TOTAL_LEVELS, todayKey } from "./levels.js";
 
 const KEY = "wsj.save";
@@ -101,6 +102,7 @@ export const state = read();
 
 const listeners = new Set();
 let writeTimer = 0;
+let version = 0;
 
 /** Subscribe to any state change. Returns an unsubscribe function. */
 export function subscribe(fn) {
@@ -119,6 +121,7 @@ function flush() {
 
 /** Persist (debounced) and notify subscribers. */
 export function commit() {
+  version += 1;
   listeners.forEach((fn) => fn(state));
   if (writeTimer) return;
   writeTimer = setTimeout(flush, 180);
@@ -274,7 +277,7 @@ export function countWordFound(ms) {
   commit();
 }
 
-export function useHint() {
+export function recordHintUsed() {
   state.stats.hintsUsed += 1;
   commit();
 }
@@ -284,6 +287,35 @@ export function resetProgress() {
   const keepSettings = { ...state.settings };
   const fresh = defaults();
   Object.assign(state, fresh, { settings: keepSettings });
+  version += 1;
   commitNow();
   listeners.forEach((fn) => fn(state));
+}
+
+/* ---------------------------------------------------------------------- */
+/* React binding                                                           */
+/* ---------------------------------------------------------------------- */
+
+/**
+ * The save file is an external, mutable store rather than React state: the
+ * play screen writes to it on every found word, and several screens read it
+ * at once. `useSyncExternalStore` is React's supported way to subscribe to
+ * exactly that, and it keeps the store usable outside React (the audio and
+ * haptics modules read settings directly).
+ *
+ * `selector` must return a primitive or a stable reference — it is compared
+ * by identity on every notification, so returning a fresh object each call
+ * would re-render forever.
+ */
+export function useStore(selector) {
+  return useSyncExternalStore(
+    subscribe,
+    () => selector(state),
+    () => selector(state)
+  );
+}
+
+/** Bumped on every commit, for components that just need "something changed". */
+export function useStoreVersion() {
+  return useSyncExternalStore(subscribe, () => version, () => version);
 }

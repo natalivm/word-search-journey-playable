@@ -1,14 +1,15 @@
 # Word Search Journey — Game Guide
 
-The full game lives in `game/`. It is a dependency-free, installable web game
-that plays offline: plain ES modules, no build step, no framework, no bundler.
+The game is a React app built with Vite. It is installable and plays offline.
 
-- Play locally: `npx http-server . -p 8099` then open
-  <http://127.0.0.1:8099/game/>
-- Published at `<pages-url>/game/`
+```bash
+npm install
+npm run dev       # dev server with hot reload, http://localhost:5173
+npm run build     # production build into dist/
+npm run check     # lint + verify levels + build, same as CI
+```
 
-ES modules need a real HTTP origin, so opening `game/index.html` straight from
-the filesystem will not work. Any static server will do.
+Published at `<pages-url>/game/`. CI builds it; `dist/` is not committed.
 
 ## What is in it
 
@@ -25,36 +26,47 @@ Plus a daily puzzle, seeded by date, that keeps a streak.
 ## Architecture
 
 ```text
-game/
+index.html               the landing page (plain static, never built)
+vite.config.js           root is app/, so the landing page stays untouched
+app/
   index.html             app shell + pre-paint theme script
-  manifest.webmanifest   installability
-  sw.js                  offline pre-cache
-  css/
-    tokens.css           colour, type, spacing, motion; all theming
-    base.css             reset, app shell, buttons, toasts, sheets
-    screens.css          home, map, profile, settings
-    game.css             board, HUD, overlays
-  js/
-    main.js              boot, lifecycle, install prompt, SW registration
-    router.js            screen registry + history/back-button handling
-    store.js             save file, derived values, mutations
-    theme.js             settings -> <html> data-attributes
-    ui.js                DOM helpers, icons, toasts, sheets, confetti
-    rng.js               seeded PRNG (mulberry32)
-    words.js             10 themed word packs + filler letter frequencies
-    levels.js            difficulty curve, star thresholds, rewards
-    generator.js         backtracking word placement
-    achievements.js      badge definitions and checks
-    audio.js             synthesized SFX and music (no audio files)
-    haptics.js           navigator.vibrate wrapper
-    screens/             one module per screen
+  public/                copied verbatim into the build
+    manifest.webmanifest
+    sw.js                offline pre-cache (list written at build time)
+    icons/
+  src/
+    main.jsx             mount, styles, service worker registration
+    App.jsx              screen stack, lifecycle, install prompt
+    components/
+      Icon.jsx  Stars.jsx  ProgressBar.jsx  TopBar.jsx  Overlays.jsx
+    screens/
+      HomeScreen.jsx  MapScreen.jsx  PlayScreen.jsx
+      ProfileScreen.jsx  SettingsScreen.jsx
+    lib/                 framework-agnostic; no JSX, mostly no React
+      router.js          useRouter: hash routing, history, per-screen params
+      store.js           save file, derived values, mutations, useStore
+      overlays.js        toasts, sheet, confetti, live region
+      theme.js           settings -> <html> data-attributes
+      format.js          time and number formatting
+      rng.js             seeded PRNG (mulberry32)
+      words.js           10 themed word packs + filler letter frequencies
+      levels.js          difficulty curve, star thresholds, rewards
+      generator.js       backtracking word placement
+      achievements.js    badge definitions and checks
+      audio.js           synthesized SFX and music (no audio files)
+      haptics.js         navigator.vibrate wrapper
+    styles/              tokens.css base.css screens.css game.css
 ```
+
+Everything in `lib/` except `router.js` and `store.js` is plain JavaScript with
+no React import, so the game rules can be tested in Node — which is exactly
+what `scripts/verify-levels.mjs` does.
 
 ### Levels are generated, not authored
 
 A level is a *description* — size, word count, allowed directions, par time —
-derived from its number by `levelAt(n)` in `levels.js`. The board itself is
-built on demand by `generator.js` from a seed string (`wsj-v1-<chapter>-<n>`),
+derived from its number by `levelAt(n)` in `lib/levels.js`. The board itself is
+built on demand by `lib/generator.js` from a seed string (`wsj-v1-<chapter>-<n>`),
 so the same level number always yields the same grid on every device without
 shipping 80 hand-made boards.
 
@@ -70,7 +82,7 @@ line within bounds. CI runs it on every push.
 
 ### The difficulty curve
 
-Tuned in one place, in `levels.js`:
+Tuned in one place, in `lib/levels.js`:
 
 | Levels | Grid | Words | Directions |
 | --- | --- | --- | --- |
@@ -83,6 +95,33 @@ Tuned in one place, in `levels.js`:
 Three stars needs no hints *and* a finish inside par. Two stars allows one
 hint or a slower run. Finishing always pays at least one star.
 
+### State lives outside React
+
+The save file is a mutable module (`lib/store.js`), not React state: the play
+screen writes to it on every found word, and several screens read it at once.
+Components subscribe with `useSyncExternalStore` via `useStore` /
+`useStoreVersion`, which keeps the store usable from non-React code — the audio
+and haptics modules read settings directly.
+
+Toasts, the modal sheet and confetti work the same way (`lib/overlays.js`), so
+any module can raise one without being a component or being handed a callback.
+
+### Screens stay mounted
+
+Once visited, a screen stays in the tree and is cross-faded by CSS. That keeps
+scroll position on the map, and keeps a level in progress alive if the player
+dips into Settings from the pause menu. Inactive screens are `inert`, so focus
+and screen readers never reach them, and the router remembers the params each
+screen was last shown with so an inactive screen never falls back to defaults.
+
+The play screen derives `paused` as `userPaused || !active`, so leaving the
+screen stops the clock without any effect having to keep a flag in sync. The
+running clock lives in a single effect whose cleanup banks the elapsed time, so
+pausing, finishing, navigating away and unmounting all settle through one path.
+
+Restarting a level remounts `<Level>` via its `key` rather than resetting a
+dozen pieces of state by hand.
+
 ### The board is three stacked layers
 
 ```text
@@ -91,6 +130,9 @@ hint or a slower run. Finishing always pays at least one star.
   svg.layer--lines  found-word capsules      <- drawn between the two
   .layer--letters   letters, and all input
 ```
+
+Tiles and cells are `memo`ised on primitives, so dragging across the board
+re-renders only the handful of cells whose state actually moved, not all 144.
 
 Drawing the highlight *between* the tiles and the letters is what makes a
 found word read as a coloured capsule with the letters on top, the way a
@@ -143,23 +185,25 @@ sent anywhere; there is no network call after load.
 
 ## Changing things
 
-- **Words and themes**: `game/js/words.js`. Keep entries A-Z only, 3-10
+- **Words and themes**: `app/src/lib/words.js`. Keep entries A-Z only, 3-10
   letters, with a good spread of lengths — the bigger grids filter out short
   words and will run out of candidates otherwise. Run
   `node scripts/verify-levels.mjs` after editing.
 - **Difficulty**: `sizeFor`, `wordCountFor`, `directionsFor`, `parSecondsFor`
-  in `game/js/levels.js`.
-- **Economy**: `rewardFor` in `levels.js`, `HINT_COST` in `screens/play.js`.
-- **Colours**: `game/css/tokens.css` only. Both themes and both palettes are
-  defined there.
-- **Icons**: edit `game/icons/icon.svg`, then
+  in `app/src/lib/levels.js`.
+- **Economy**: `rewardFor` in `lib/levels.js`, `HINT_COST` in
+  `screens/PlayScreen.jsx`.
+- **Colours**: `app/src/styles/tokens.css` only. Both themes and both palettes
+  are defined there.
+- **Icons**: edit `app/public/icons/icon.svg`, then
   `node scripts/make-icons.mjs` to re-render the PNGs (needs Playwright).
-- **Adding a screen**: create `js/screens/<name>.js` exporting
-  `{ build, mount?, unmount? }`, then `register()` it in `main.js` and add
-  it to the `ASSETS` list in `sw.js`.
+- **Adding a screen**: create `app/src/screens/<Name>Screen.jsx`, then add it
+  to `SCREENS` in `lib/router.js` and to `COMPONENTS` / `LABELS` in `App.jsx`.
 
-Bump `CACHE` in `game/sw.js` whenever shipped files change, or returning
-players will keep the old version until the cache is evicted.
+The service worker needs no manual upkeep: `scripts/write-sw-manifest.mjs`
+rewrites its precache list from the real build output and derives the cache
+name from the asset hashes, so every deploy invalidates the previous cache
+automatically.
 
 ## Relationship to the playable ad
 

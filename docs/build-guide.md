@@ -42,7 +42,8 @@ For GitHub Pages preview, the repo also includes:
 
 - `index.html`: a landing page linking to the game, the playable ad and these docs
 - `.nojekyll`: tells GitHub Pages to serve files as plain static assets
-- `game/`: the full word search game (see [`game-guide.md`](./game-guide.md))
+- `app/`: the full word search game, built to `dist/` and deployed at
+  `/game/` (see [`game-guide.md`](./game-guide.md))
 
 It includes:
 
@@ -81,10 +82,15 @@ bash scripts/package.sh
 Output:
 
 ```text
-dist/word-search-journey-playable.zip
+dist-ad/word-search-journey-playable.zip
 ```
 
-The ZIP currently contains only `index.html`.
+The ZIP currently contains only `index.html`. It is generated, not committed;
+CI builds it, uploads it as a workflow artifact, and publishes it at
+`/dist/word-search-journey-playable.zip`.
+
+(`dist/` is the game's Vite build output, which is why the ad ZIP lives in
+`dist-ad/`.)
 
 ## GitHub Pages Preview
 
@@ -142,10 +148,11 @@ The ad and the game are deliberately separate builds:
 
 | | `playable-ad/` | `game/` |
 | --- | --- | --- |
-| Shape | one self-contained HTML file | multi-file ES-module app |
+| Shape | one self-contained HTML file | React app built with Vite |
 | Content | one hard-coded level, four words | 80 generated levels + daily puzzle |
 | Goal | drive a store install | retain a player |
 | Constraints | ad-network ZIP limits, MRAID | installable PWA, offline play |
+| Build | none, ship the file | `npm run build` |
 
 Keeping them apart means the ad stays inside network size limits and has no
 module loading to trip over inside an ad webview, while the game is free to

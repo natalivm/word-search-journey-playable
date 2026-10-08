@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
+# Package the playable ad creative for ad-network upload.
+#
+# This is the ad in playable-ad/, not the game — the game is built with
+# `npm run build` and deployed as a site, not shipped as a ZIP.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="$ROOT_DIR/dist"
+OUT_DIR="$ROOT_DIR/dist-ad"
 OUT_FILE="$OUT_DIR/word-search-journey-playable.zip"
 
 mkdir -p "$OUT_DIR"

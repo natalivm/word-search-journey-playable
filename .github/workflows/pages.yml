@@ -29,8 +29,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      - name: Validate static files
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Generate every level and verify the puzzles are solvable
+        run: npm run verify
+
+      - name: Build the game
+        run: npm run build
+
+      - name: Validate landing page and ad creative
         run: |
           test -f index.html
           test -f playable-ad/index.html
@@ -39,70 +52,43 @@ jobs:
           grep -q './game/' index.html
           grep -q 'com.playvalve.wsjourney' playable-ad/index.html
 
-      - name: Validate game files
+      - name: Validate build output
         run: |
-          test -f game/index.html
-          test -f game/manifest.webmanifest
-          test -f game/sw.js
-          test -f game/icons/icon-192.png
-          test -f game/icons/icon-512.png
-          test -f game/icons/icon-maskable-512.png
-          node -e "JSON.parse(require('fs').readFileSync('game/manifest.webmanifest','utf8'))"
+          test -f dist/index.html
+          test -f dist/manifest.webmanifest
+          test -f dist/sw.js
+          test -f dist/icons/icon-192.png
+          test -f dist/icons/icon-512.png
+          test -f dist/icons/icon-maskable-512.png
+          node -e "JSON.parse(require('fs').readFileSync('dist/manifest.webmanifest','utf8'))"
 
-      - name: Check every asset the service worker pre-caches exists
+      - name: Check the service worker pre-caches the real build output
         run: |
           node -e "
             const fs = require('fs');
-            const src = fs.readFileSync('game/sw.js', 'utf8');
-            const list = src.slice(src.indexOf('const ASSETS'), src.indexOf('];', src.indexOf('const ASSETS')));
-            const paths = [...list.matchAll(/\"\.\/([^\"]+)\"/g)].map(m => 'game/' + m[1]);
+            const src = fs.readFileSync('dist/sw.js', 'utf8');
+            const block = src.match(/PRECACHE_START \*\/([\s\S]*?)\/\* PRECACHE_END/);
+            if (!block) { console.error('Precache markers missing — did the build postStep run?'); process.exit(1); }
+            const paths = [...block[1].matchAll(/\"\.\/([^\"]+)\"/g)].map(m => 'dist/' + m[1]);
+            if (!paths.length) { console.error('Precache list is empty.'); process.exit(1); }
             const missing = paths.filter(p => !fs.existsSync(p));
             if (missing.length) {
               console.error('Service worker pre-caches files that do not exist:');
               for (const p of missing) console.error('  ' + p);
               process.exit(1);
             }
+            if (/wsj-dev/.test(src)) { console.error('Cache name was not stamped by the build.'); process.exit(1); }
             console.log('All ' + paths.length + ' pre-cached assets exist.');
           "
-
-      - name: Check every module the game imports resolves
-        run: |
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const root = 'game/js';
-            let checked = 0;
-            const walk = (dir) => {
-              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                const full = path.join(dir, entry.name);
-                if (entry.isDirectory()) { walk(full); continue; }
-                if (!entry.name.endsWith('.js')) continue;
-                const src = fs.readFileSync(full, 'utf8');
-                for (const m of src.matchAll(/from\s+[\"'](\.[^\"']+)[\"']/g)) {
-                  const target = path.resolve(path.dirname(full), m[1]);
-                  checked++;
-                  if (!fs.existsSync(target)) {
-                    console.error('Unresolved import ' + m[1] + ' in ' + full);
-                    process.exit(1);
-                  }
-                }
-              }
-            };
-            walk(root);
-            console.log('All ' + checked + ' relative imports resolve.');
-          "
-
-      - name: Generate every level and verify the puzzles are solvable
-        run: node scripts/verify-levels.mjs
 
       - name: Package playable ZIP
         run: bash scripts/package.sh
 
       - name: Validate ad ZIP
         run: |
-          test -f dist/word-search-journey-playable.zip
-          unzip -l dist/word-search-journey-playable.zip | grep -q 'index.html'
-          bytes="$(wc -c < dist/word-search-journey-playable.zip)"
+          test -f dist-ad/word-search-journey-playable.zip
+          unzip -l dist-ad/word-search-journey-playable.zip | grep -q 'index.html'
+          bytes="$(wc -c < dist-ad/word-search-journey-playable.zip)"
           max_bytes="$((5 * 1024 * 1024))"
           if [ "$bytes" -gt "$max_bytes" ]; then
             echo "Playable ZIP is larger than 5 MB: $bytes bytes"
@@ -113,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: word-search-journey-playable
-          path: dist/word-search-journey-playable.zip
+          path: dist-ad/word-search-journey-playable.zip
 
   deploy:
     name: Deploy GitHub Pages
@@ -128,14 +114,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the game
+        run: npm run build
+
       - name: Package playable ZIP
         run: bash scripts/package.sh
 
-      - name: Build static site artifact
+      - name: Assemble the site
         run: |
           mkdir -p _site
           cp index.html .nojekyll _site/
-          cp -R game playable-ad docs dist artifacts _site/
+          cp -R playable-ad docs artifacts _site/
+          cp -R dist _site/game
+          cp -R dist-ad _site/dist
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

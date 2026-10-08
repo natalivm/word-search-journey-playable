@@ -20,11 +20,6 @@
 
   <title>Word Search Journey</title>
 
-  <link rel="stylesheet" href="./css/tokens.css">
-  <link rel="stylesheet" href="./css/base.css">
-  <link rel="stylesheet" href="./css/screens.css">
-  <link rel="stylesheet" href="./css/game.css">
-
   <script>
     // Apply the saved theme before first paint so there is no white flash on
     // a dark-mode device. Kept inline and tiny on purpose.
@@ -52,22 +47,7 @@
 
 <body>
   <div id="app">
-    <!-- Router mounts each screen in here. -->
-    <div id="screens"></div>
-
-    <!-- Shared overlay hosts, ordered by stacking concern. -->
-    <div id="fxHost" aria-hidden="true"></div>
-    <div id="toastHost" aria-hidden="true"></div>
-    <div id="modalHost" inert></div>
-
-    <div id="installBar" hidden>
-      <p>Add to home screen<small>Play offline, full screen</small></p>
-      <button type="button" data-act="install">Install</button>
-      <button type="button" data-act="dismiss" aria-label="Dismiss">Not now</button>
-    </div>
-
-    <!-- Status messages for screen readers; visually hidden. -->
-    <p id="live" class="sr-only" role="status" aria-live="polite"></p>
+    <div id="root"></div>
 
     <div id="boot">
       <div class="boot-inner">
@@ -83,6 +63,6 @@
     </p>
   </noscript>
 
-  <script type="module" src="./js/main.js"></script>
+  <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

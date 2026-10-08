@@ -27,7 +27,7 @@ async function loadChromium() {
     /* Not a local dependency — try a global install below. */
   }
 
-  let globalRoot = "";
+  let globalRoot;
   try {
     globalRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
   } catch {
@@ -48,7 +48,7 @@ async function loadChromium() {
 const chromium = await loadChromium();
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const iconsDir = join(root, "game", "icons");
+const iconsDir = join(root, "app", "public", "icons");
 const svg = readFileSync(join(iconsDir, "icon.svg"), "utf8");
 
 // A maskable icon must survive the platform cropping it to a circle or

@@ -14,9 +14,9 @@ import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { levelAt, dailyLevel, TOTAL_LEVELS, DIRS } = await import(
-  join(root, "game/js/levels.js")
+  join(root, "app/src/lib/levels.js")
 );
-const { generate } = await import(join(root, "game/js/generator.js"));
+const { generate } = await import(join(root, "app/src/lib/generator.js"));
 
 const failures = [];
 let boards = 0;
