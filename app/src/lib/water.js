@@ -3,9 +3,11 @@
  *
  * The CSS version of this water is two crossing meshes of gradient bands —
  * cheap, and it reads as water from a distance, but it repeats and it cannot
- * refract anything. This draws the real thing: a tiled floor seen through a
- * moving surface, with the caustic net that forms where the surface focuses
- * sunlight onto it.
+ * hold a shape. This paints the pool instead: flat poured tones, foam drawn
+ * as contour strokes along the swell, glints added by hand, and the whole
+ * surface held on twos the way painted animation is. It is deliberately not
+ * a simulation — a photoreal pool would sit oddly under a map of cartoon
+ * floats.
  *
  * No library. The whole renderer is one full-screen triangle and one shader,
  * in the same spirit as `particles.js` — which hand-rolls its own canvas
@@ -57,59 +59,90 @@ float noise(vec2 p) {
   );
 }
 
-/* The surface: four crossing swells, two of them bent by noise so the set
-   never settles into a plaid. Returns roughly -1..1. */
-float surface(vec2 p, float t) {
-  float v = 0.0;
-  v += sin(p.x * 3.1 + t * 0.85 + noise(p * 1.7) * 2.2);
-  v += sin(p.y * 2.6 - t * 0.73 + noise(p * 2.3 + 11.0) * 2.0);
-  v += sin((p.x + p.y) * 2.05 + t * 1.21);
-  v += sin((p.x - p.y) * 3.65 - t * 0.97);
-  return v * 0.25;
+/* The swell. Each wave is bent by another wave rather than added to one, so
+   the contours curve and meander the way a brush draws them, instead of
+   crossing into the plaid that plain summed sines give you. Roughly -1..1. */
+float swell(vec2 p, float t) {
+  float v = sin(p.x * 1.55 + t * 0.55 + sin(p.y * 0.85 - t * 0.37) * 1.25);
+  v += 0.72 * sin(p.y * 1.25 - t * 0.47 + sin(p.x * 1.05 + t * 0.29) * 1.35);
+  v += 0.42 * sin((p.x + p.y) * 2.05 + t * 0.81);
+  return v / 2.14;
+}
+
+/* A four-point glint, the kind that is drawn on rather than simulated. They
+   sit on a sparse grid, one per cell, and blink in and out. */
+float glints(vec2 p, float t) {
+  vec2 cell = floor(p);
+  vec2 f = fract(p) - 0.5;
+
+  float seed = hash(cell);
+  // Each one has its own offset inside its cell and its own blink phase, so
+  // the grid never shows through as a grid.
+  f -= (vec2(hash(cell + 7.3), hash(cell + 19.1)) - 0.5) * 0.6;
+
+  float blink = smoothstep(0.55, 0.95, sin(t * 1.7 + seed * 42.0) * 0.5 + 0.5);
+  if (blink <= 0.0) return 0.0;
+
+  float arm = 0.19 * blink;
+  float bar = (1.0 - smoothstep(0.0, 0.016, abs(f.x))) * (1.0 - smoothstep(0.0, arm, abs(f.y)));
+  float bar2 = (1.0 - smoothstep(0.0, 0.016, abs(f.y))) * (1.0 - smoothstep(0.0, arm, abs(f.x)));
+  return max(bar, bar2) * blink;
 }
 
 void main() {
-  /* Normalised on height, so the pattern keeps its proportions whatever the
-     screen is. The scale sets how much water you are looking at: about seven
-     wave-widths from top to bottom, which is a pool rather than a bathtub. */
+  /* Normalised on height, so the painting keeps its proportions whatever the
+     screen is. */
   vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
-  vec2 p = uv * 7.0;
-  float t = uTime;
+  /* Stretched across, so the strokes run with the length of the pool rather
+     than curling into blobs. */
+  vec2 p = uv * 6.9 * vec2(0.82, 1.22);
 
-  /* Slope of the surface, as a displacement. Everything below the water is
-     looked up through it, which is what refraction is. */
-  vec2 warp = vec2(
-    surface(p + vec2(0.0, 1.3), t),
-    surface(p.yx + vec2(2.7, 0.0), t * 1.09)
-  );
+  /* Held frames. Painted animation runs on twos and threes rather than on
+     every frame, and water drawn by hand moves in steps — so the whole
+     surface is quantised to 12 a second. It is the single strongest cue that
+     this was painted rather than simulated. */
+  float t = floor(uTime * 12.0) / 12.0;
 
-  /* Pool floor: square tiles with a slightly darker grout, wobbling because
-     we are reading them through the water rather than straight on. */
-  vec2 tile = (p + warp * 0.16) * 2.6;
-  vec2 cell = abs(fract(tile) - 0.5);
-  float grout = smoothstep(0.40, 0.5, max(cell.x, cell.y));
-  float shade = hash(floor(tile)) * 0.05;
-
-  /* Caustics focus where the surface is flat, so the bright net is the ridge
-     line of the wave field: thin where the power is high, two scales so it
-     has both a big cell structure and a fine sparkle. */
-  float h1 = surface(p * 1.1 + warp * 0.5, t * 0.8);
-  float h2 = surface(p * 2.1 - warp * 0.34, t * 1.15 + 4.0);
-  float net =
-    0.40 * pow(max(0.0, 1.0 - abs(h1)), 9.0) +
-    0.20 * pow(max(0.0, 1.0 - abs(h2)), 13.0);
-
-  /* Shallow at the top of the screen, deep at the bottom — the same reading
-     as the gradient this replaces. */
+  float h = swell(p, t);
   float depth = clamp(gl_FragCoord.y / uRes.y, 0.0, 1.0);
-  vec3 col = mix(uDeep, uShallow, depth);
 
-  col *= 1.0 - shade;
-  col *= mix(1.0, 0.93, grout);
-  col += uGlow * net * uStrength * (0.55 + 0.45 * depth);
+  /* Flat poured tones instead of a gradient: the swell and the depth are
+     added, then quantised into four steps. Everything else is drawn on top
+     of these shapes. */
+  float tone = depth * 0.62 + h * 0.3 + 0.2;
+  float steps = 4.0;
+  float banded = floor(clamp(tone, 0.0, 0.999) * steps) / (steps - 1.0);
+  vec3 col = mix(uDeep, uShallow, clamp(banded, 0.0, 1.0));
 
-  /* A wide sheen where the sun hits the far end of the pool. */
-  col += uGlow * smoothstep(0.78, 1.0, depth) * 0.03 * uStrength;
+  /* Foam: contour strokes along two isolines of the same swell. The stroke
+     width breathes along its length, so it tapers and swells like a loaded
+     brush rather than reading as a vector outline. */
+  float wob = noise(p * 1.15 + vec2(t * 0.12, -t * 0.09));
+  float wob2 = noise(p * 1.7 - vec2(t * 0.1, 31.0));
+  // Subtracting before scaling lets the width reach zero, which is what makes
+  // a stroke taper off and break instead of running on forever like an
+  // outline. The floor only keeps smoothstep's edges in order.
+  float wide = max(0.004, 0.155 * (wob - 0.26));
+  float thin = max(0.003, 0.075 * (wob2 - 0.3));
+
+  float crest = 1.0 - smoothstep(wide * 0.62, wide, abs(h - 0.40));
+  float trail = 1.0 - smoothstep(thin * 0.55, thin, abs(h - 0.66));
+  float under = 1.0 - smoothstep(thin * 0.6, thin, abs(h + 0.34));
+
+  /* The near-side line is the heavy one; the others are the lighter marks
+     that follow a crest in a painted sea. */
+  float foam = clamp(crest + trail * 0.55, 0.0, 1.0);
+
+  col = mix(col, uGlow, foam * 0.92 * uStrength);
+  col = mix(col, mix(col, uGlow, 0.55), under * 0.6 * uStrength);
+
+  /* Glints ride the brighter water, where the light would be catching it. */
+  float sparkle = glints(p * 1.45 + vec2(0.0, t * 0.05), t) * smoothstep(0.25, 0.75, tone);
+  col = mix(col, uGlow, clamp(sparkle, 0.0, 1.0) * 0.85 * uStrength);
+
+  /* A trace of tooth, so the flat areas read as paint on paper rather than
+     as a fill. */
+  col *= 0.985 + 0.03 * noise(p * 26.0);
 
   gl_FragColor = vec4(col, 1.0);
 }`;

@@ -162,10 +162,22 @@ drifters animating where nobody can see them.
 
 The water under them is a fragment shader, in `lib/water.js` — one
 full-screen triangle, no library, in the same spirit as the hand-rolled
-particle canvas. It draws a tiled pool floor seen through a moving surface:
-the surface slope displaces the lookup, which is refraction, and the bright
-net is the ridge line of that same wave field, which is where real caustics
-focus. Four things keep it honest:
+particle canvas. It is painted rather than simulated, because a photoreal
+pool would sit oddly under a map of cartoon floats:
+
+- The tone is **poured, not graded**: the swell and the depth are added and
+  then quantised into four steps, so the water is flat shapes with hard edges.
+- The foam is **drawn**, as contour strokes along two isolines of that same
+  swell. Their width is a noise field *minus a constant*, so it can reach
+  zero — which is what makes a stroke taper off and break, instead of running
+  on forever like an outline.
+- The glints are **added by hand**: four-point stars on a sparse jittered
+  grid, blinking on their own phases.
+- Time is **held on twos**, quantised to 12 a second. Painted animation does
+  not move on every frame, and that is the single strongest cue that this was
+  drawn rather than computed.
+
+Four things keep it honest:
 
 - It is an enhancement, never a requirement. If WebGL is missing or the
   context is lost, `createWater()` returns null, the canvas never gets its
@@ -267,7 +279,7 @@ animation library, no three.js, and nothing fetched at runtime.
 | Screen changes | The arriving screen slides in from the direction of travel; the leaving one only fades |
 | Reward figures | `useCountUp` eases the number up, then kicks when it lands |
 | Pool floats | Per-ring `--bob-dur` and `--bob-delay`, so no two are in step; the bob is on an inner element so the tap target never moves |
-| Pool water | A WebGL fragment shader (`lib/water.js`): a tiled floor read through a moving surface, with the caustic net that forms where the surface focuses light |
+| Pool water | A WebGL fragment shader (`lib/water.js`): flat poured tones, foam drawn as tapering contour strokes along the swell, and the whole surface held on twos at 12 a second |
 
 Two rules the pass follows:
 
