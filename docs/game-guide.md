@@ -56,6 +56,7 @@ app/
       pool.js            the Pool Party event: 10 hard rings, float colours, prize
       generator.js       backtracking word placement
       achievements.js    badge definitions and checks
+      water.js           the pool surface, as a WebGL fragment shader
       audio.js           synthesized SFX and music (no audio files)
       haptics.js         navigator.vibrate wrapper
     styles/              tokens.css base.css screens.css game.css pool.css
@@ -159,6 +160,31 @@ animation on the screen is scoped to `.screen.is-active`: screens stay mounted,
 and an unscoped loop would keep ten floats, two caustic layers and three
 drifters animating where nobody can see them.
 
+The water under them is a fragment shader, in `lib/water.js` — one
+full-screen triangle, no library, in the same spirit as the hand-rolled
+particle canvas. It draws a tiled pool floor seen through a moving surface:
+the surface slope displaces the lookup, which is refraction, and the bright
+net is the ridge line of that same wave field, which is where real caustics
+focus. Four things keep it honest:
+
+- It is an enhancement, never a requirement. If WebGL is missing or the
+  context is lost, `createWater()` returns null, the canvas never gets its
+  `is-live` class, and the CSS gradient water underneath is simply left
+  showing — which is also what is on screen for the frame before the first
+  draw.
+- Colours come from the four `--pool-*` custom properties rather than being
+  baked into the GLSL, and a `MutationObserver` on `data-theme` re-reads them,
+  so the pool flips with the app like every other surface.
+- Reduced motion still gets the shader, drawn once and frozen. That is the
+  reason the context asks for `preserveDrawingBuffer` — without it the buffer
+  is cleared once composited, and a held frame would show and then vanish.
+- It runs only while the pool is the screen on show, and the renderer is built
+  once because a WebGL context belongs to its canvas. Its resize guard keys on
+  what *this renderer* has configured rather than on the canvas size: a
+  freshly linked program starts with every uniform at zero, so a second
+  renderer on an already-sized canvas still has to tell its own shader the
+  resolution. (Getting that wrong divides by zero and paints the pool white.)
+
 One rendering note worth keeping: a float is a disc with its middle masked
 out, so the pool shows through the hole. That means anything which has to stay
 visible through the hole — the ring number — is a *sibling* of the masked
@@ -228,8 +254,8 @@ centres are measured once per resize (`measure()`), never per pointer move.
 
 ## Animation
 
-Everything is CSS or canvas — no animation library, and no three.js. The
-whole pass costs about 4 KB gzipped.
+Everything is CSS, a 2D canvas or one hand-written fragment shader — no
+animation library, no three.js, and nothing fetched at runtime.
 
 | Effect | How |
 | --- | --- |
@@ -241,7 +267,7 @@ whole pass costs about 4 KB gzipped.
 | Screen changes | The arriving screen slides in from the direction of travel; the leaving one only fades |
 | Reward figures | `useCountUp` eases the number up, then kicks when it lands |
 | Pool floats | Per-ring `--bob-dur` and `--bob-delay`, so no two are in step; the bob is on an inner element so the tap target never moves |
-| Pool water | Two crossing meshes of soft gradient bands, translated and scaled — no blur filter, so it stays cheap on a phone |
+| Pool water | A WebGL fragment shader (`lib/water.js`): a tiled floor read through a moving surface, with the caustic net that forms where the surface focuses light |
 
 Two rules the pass follows:
 

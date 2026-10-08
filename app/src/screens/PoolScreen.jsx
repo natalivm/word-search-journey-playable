@@ -30,6 +30,7 @@ import {
 } from "../lib/store.js";
 import { checkAchievements } from "../lib/achievements.js";
 import { useCountUp, useOnDeactivate } from "../lib/hooks.js";
+import { createWater } from "../lib/water.js";
 import { formatNumber } from "../lib/format.js";
 import * as audio from "../lib/audio.js";
 import * as haptics from "../lib/haptics.js";
@@ -168,6 +169,7 @@ function Celebration({ open, onCollect }) {
 export default function PoolScreen({ active, go }) {
   useStoreVersion();
   const bodyRef = useRef(null);
+  const waterRef = useRef(null);
 
   const through = poolUnlockedThrough();
   const cleared = poolRingsCleared();
@@ -190,6 +192,29 @@ export default function PoolScreen({ active, go }) {
     audio.sfxTap();
     go("play", { pool: String(level.poolIndex) });
   }, [go]);
+
+  // Built once, because a WebGL context belongs to its canvas and the screen
+  // outlives every visit to it. If it cannot be built — no WebGL, a blocked
+  // or lost context — the CSS water underneath is simply left showing.
+  const shaderRef = useRef(null);
+  useEffect(() => {
+    shaderRef.current = createWater(waterRef.current);
+    return () => {
+      shaderRef.current?.destroy();
+      shaderRef.current = null;
+    };
+  }, []);
+
+  // ...and it only runs while the pool is the screen on show: screens stay
+  // mounted, and nothing should be driving a shader behind one nobody is
+  // looking at.
+  useEffect(() => {
+    const water = shaderRef.current;
+    if (!water) return undefined;
+    if (active) water.start();
+    else water.stop();
+    return undefined;
+  }, [active]);
 
   // Open on the ring about to be played — the bottom of the pool for a new
   // challenger, somewhere up the water later on.
@@ -257,6 +282,9 @@ export default function PoolScreen({ active, go }) {
       {/* The surface itself: behind everything, and it does not scroll with
           the floats, because it is the pool rather than the content. */}
       <div className="pool-water" aria-hidden="true">
+        <canvas className="pool-shader" ref={waterRef} />
+        {/* The fallback, and what shows for the frame before the shader's
+            first draw. The canvas hides these once it is live. */}
         <span className="pool-caustic pool-caustic--a" />
         <span className="pool-caustic pool-caustic--b" />
         {DRIFTERS.map((drifter) => (
