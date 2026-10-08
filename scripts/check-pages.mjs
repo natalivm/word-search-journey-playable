@@ -6,6 +6,9 @@
  * absolute "/assets/..." works perfectly on localhost and 404s in
  * production — exactly the kind of bug that only shows up after deploying.
  *
+ * The build output is the whole published site, so everything checked here
+ * lands at the Pages URL exactly as it appears in dist/.
+ *
  *   node scripts/check-pages.mjs
  */
 
@@ -129,12 +132,6 @@ for (const { file, arg } of registrations) {
 /* -- 5. Jekyll must be off, or paths starting with _ get dropped -------- */
 if (!existsSync(join(root, ".nojekyll"))) {
   problems.push(".nojekyll is missing from the repo root");
-}
-
-/* -- 6. The landing page must link relatively too ----------------------- */
-const landing = readFileSync(join(root, "index.html"), "utf8");
-for (const match of landing.matchAll(/\b(?:src|href)="(\/[^/"][^"]*)"/g)) {
-  problems.push(`index.html (landing) references ${match[1]} from the domain root`);
 }
 
 if (problems.length) {

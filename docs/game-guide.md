@@ -9,7 +9,8 @@ npm run build     # production build into dist/
 npm run check     # lint + verify levels + build, same as CI
 ```
 
-Published at `<pages-url>/game/`. CI builds it; `dist/` is not committed.
+The build output is the whole published site, so the Pages URL opens straight
+into the game. CI builds it; `dist/` is not committed.
 
 ## What is in it
 
@@ -26,8 +27,7 @@ Plus a daily puzzle, seeded by date, that keeps a streak.
 ## Architecture
 
 ```text
-index.html               the landing page (plain static, never built)
-vite.config.js           root is app/, so the landing page stays untouched
+vite.config.js           Vite's root is app/
 app/
   index.html             app shell + pre-paint theme script
   public/                copied verbatim into the build
@@ -206,7 +206,8 @@ and `particles.js` refuses to emit rather than drawing into a hidden canvas.
 
 ## Built for a GitHub Pages project path
 
-The site is served from `https://<user>.github.io/<repo>/`, which rules out a
+The site is served from `https://<user>.github.io/<repo>/` — the build output
+published at that path, so the URL opens the game directly. That rules out a
 few things that would otherwise be the obvious choice:
 
 - **Hash routing, not the History API for routes.** Pages cannot rewrite
@@ -282,10 +283,3 @@ The service worker needs no manual upkeep: `scripts/write-sw-manifest.mjs`
 rewrites its precache list from the real build output and derives the cache
 name from the asset hashes, so every deploy invalidates the previous cache
 automatically.
-
-## Relationship to the playable ad
-
-`playable-ad/` is unchanged and still ships independently — it is a single
-self-contained HTML file sized for ad networks, with its own hard-coded level
-and store CTA. The game does not share code with it; see
-[`build-guide.md`](./build-guide.md) for packaging and network delivery.
