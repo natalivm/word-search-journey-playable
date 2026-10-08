@@ -6,7 +6,9 @@
  *
  * Navigation is mirrored into history.pushState so the Android system back
  * gesture and the browser back button step through screens instead of
- * leaving the game.
+ * leaving the game. The in-app back buttons are "up" controls rather than
+ * history controls — they go to the home screen — so the router needs no
+ * back() helper of its own.
  *
  * The router also remembers the params each screen was last shown with, and
  * which screens have been visited. Both belong here rather than in App: a
@@ -116,13 +118,21 @@ export function useRouter() {
     };
   }, []);
 
-  const go = useCallback((name, params = {}) => {
+  /**
+   * Navigate, adding a history entry.
+   *
+   * `dir` is how the transition should read. It defaults to forward, but an
+   * "up" control — the back button on a screen reached from home — passes
+   * "back" so the slide matches what the player just asked for, while the
+   * history entry still behaves like any other step.
+   */
+  const go = useCallback((name, params = {}, dir = "forward") => {
     const hash = toHash(name, params);
     if (window.location.hash === hash) return;
     const depth = (window.history.state?.depth ?? 0) + 1;
     window.history.pushState({ name, params, depth }, "", hash);
     depthRef.current = depth;
-    setNav((prev) => nextState(prev, { name, params }, depth, "forward"));
+    setNav((prev) => nextState(prev, { name, params }, depth, dir));
   }, []);
 
   // Replacing keeps the same depth, so the direction cannot be inferred —
@@ -134,14 +144,6 @@ export function useRouter() {
     setNav((prev) => nextState(prev, { name, params }, depth, dir));
   }, []);
 
-  const back = useCallback((fallback = "home") => {
-    // Only step back if this session put something behind us; otherwise a
-    // deep link would walk the player out of the game.
-    if ((window.history.state?.depth ?? 0) > 0) window.history.back();
-    // A deep-linked player has nothing behind them, so this is a replace at
-    // the same depth — say explicitly that it should animate as a back step.
-    else replace(fallback, {}, "back");
-  }, [replace]);
 
   return {
     route: nav.route,
@@ -149,7 +151,6 @@ export function useRouter() {
     visited: nav.visited,
     dir: nav.dir,
     go,
-    replace,
-    back
+    replace
   };
 }

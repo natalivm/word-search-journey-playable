@@ -17,7 +17,7 @@ into the game. CI builds it; `dist/` is not committed.
 | Screen | Purpose |
 | --- | --- |
 | Home | Player strip, wallet, one primary **Continue** action, daily puzzle |
-| Journey map | 10 chapters x 8 levels on a winding trail, with stars and locks |
+| Journey map | 10 chapters x 8 levels climbing a winding trail, with stars and locks |
 | Play | The puzzle board, word list, timer, hints, pause |
 | Profile | Avatar, name, 10 lifetime stats, 12 achievements |
 | Settings | Sound, display and accessibility options, reset |
@@ -105,6 +105,31 @@ and haptics modules read settings directly.
 
 Toasts, the modal sheet and confetti work the same way (`lib/overlays.js`), so
 any module can raise one without being a component or being handed a callback.
+
+### The map climbs
+
+Level 1 sits at the very bottom and the last chapter is at the top, so
+scrolling up is making progress. The DOM is therefore built in reverse — last
+chapter first, and the highest level first within each chapter — and each
+chapter's banner renders *below* its own levels, so climbing past it reads as
+arriving at that chapter rather than leaving the previous one.
+
+Nothing else had to change for it: the trail polyline is measured from the
+laid-out nodes in DOM order, so it follows whatever order they are in, and the
+"open on the level you are about to play" scroll finds `.node.is-next`
+wherever it ends up — which for a new player is the bottom of the list.
+
+### Navigation: back is "up"
+
+The back button in a screen's top bar goes to the home screen, not to the
+previous history entry. Home is the hub every other screen is reached from, so
+"back" meaning "up to the hub" is what players expect — and it avoids landing
+somebody on the play screen they just finished when they came to the map from
+a win card. It passes `"back"` as the transition direction so the slide still
+matches the gesture.
+
+The browser and Android system back are left alone: they step through history
+via `popstate`, which is what those controls are for.
 
 ### Screens stay mounted
 

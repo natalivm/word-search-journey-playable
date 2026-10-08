@@ -157,14 +157,14 @@ function confirmReset() {
   });
 }
 
-export default function SettingsScreen({ back }) {
+export default function SettingsScreen({ go }) {
   useStoreVersion();
 
   return (
     <>
       <TopBar
         title="Settings"
-        onBack={() => { haptics.tapMedium(); audio.sfxTap(); back("home"); }}
+        onBack={() => { haptics.tapMedium(); audio.sfxTap(); go("home", {}, "back"); }}
       />
 
       <div className="screen-body settings-body">
