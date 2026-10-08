@@ -74,6 +74,27 @@ export default function HomeScreen({ go }) {
         <div className="home-wallet">
           <span className="chip chip--coin">🪙<b>{formatNumber(state.profile.coins)}</b></span>
           <span className="chip chip--streak">🔥<b>{state.daily.streak}</b></span>
+
+          {/* Profile and settings live here rather than in the grid below: they
+              are visited rarely, so they earn an icon, not a tile. */}
+          <div className="home-hud-actions">
+            <button
+              className="icon-btn icon-btn--sm"
+              type="button"
+              aria-label="Profile — stats and badges"
+              onClick={tap(() => go("profile"))}
+            >
+              <Icon name="trophy" size={18} />
+            </button>
+            <button
+              className="icon-btn icon-btn--sm"
+              type="button"
+              aria-label="Settings — sound and display"
+              onClick={tap(() => go("settings"))}
+            >
+              <Icon name="gear" size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -111,8 +132,6 @@ export default function HomeScreen({ go }) {
             })}
           />
           <TileButton icon="map" title="Journey" hint="Pick a level" onClick={tap(() => go("map"))} />
-          <TileButton icon="trophy" title="Profile" hint="Stats & badges" onClick={tap(() => go("profile"))} />
-          <TileButton icon="gear" title="Settings" hint="Sound & display" onClick={tap(() => go("settings"))} />
         </div>
 
         <p className="home-footnote">

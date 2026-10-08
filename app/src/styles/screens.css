@@ -97,7 +97,15 @@
 
 .home-wallet {
   display: flex;
+  align-items: center;
   gap: var(--sp-2);
+}
+
+/* Profile and settings: small icons in the top HUD, pushed to the far end. */
+.home-hud-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: auto;
 }
 
 .home-body {

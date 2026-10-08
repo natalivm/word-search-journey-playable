@@ -16,7 +16,7 @@ into the game. CI builds it; `dist/` is not committed.
 
 | Screen | Purpose |
 | --- | --- |
-| Home | Player strip, wallet, one primary **Continue** action, daily puzzle |
+| Home | Player strip, wallet, profile and settings icons, one primary **Continue** action, daily puzzle and journey |
 | Journey map | 10 chapters x 8 levels climbing a winding trail, with stars and locks |
 | Play | The puzzle board, word list, timer, hints, pause |
 | Profile | Avatar, name, 10 lifetime stats, 12 achievements |
@@ -121,15 +121,31 @@ wherever it ends up — which for a new player is the bottom of the list.
 
 ### Navigation: back is "up"
 
-The back button in a screen's top bar goes to the home screen, not to the
-previous history entry. Home is the hub every other screen is reached from, so
-"back" meaning "up to the hub" is what players expect — and it avoids landing
-somebody on the play screen they just finished when they came to the map from
-a win card. It passes `"back"` as the transition direction so the slide still
-matches the gesture.
+Back is an *up* control, not a history control. Every screen has exactly one
+parent — home is the root, the map and the daily puzzle hang off it, a level
+hangs off the map (`parentOf` in `lib/router.js`) — and both the in-app back
+buttons and the Android system back gesture walk that chain. Home is the hub
+every other screen is reached from, so "up to the hub" is what players expect,
+and it avoids landing somebody back in the puzzle they just quit.
 
-The browser and Android system back are left alone: they step through history
-via `popstate`, which is what those controls are for.
+The system gesture only follows that chain because the router keeps the browser
+history at most two entries deep: a home root, plus one entry for the screen on
+show. A pop therefore always lands on home, and when the screen being left has
+a parent that is not home, the router rebuilds that parent's entry on top of
+the root. A stack that recorded where the player *had been* would put the
+puzzle behind the map after "Quit to map", and the next back press would drop
+them straight back into it.
+
+Three details keep that stack honest. Entries the router writes carry a state
+object, so an entry without one means the hash was changed from outside the
+router (a manual edit, a link) and is adopted as a step rather than read as a
+back press. `popstate` and `hashchange` can both fire for one move, so they
+share a handler that returns early once the move is already reflected. And
+whatever hash the page is opened with is normalised on boot, so even a deep
+link to a level has the main menu behind it.
+
+In-app back buttons pass `"back"` as the transition direction so the slide
+still matches the gesture.
 
 ### Screens stay mounted
 
