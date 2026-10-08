@@ -20,13 +20,53 @@
 /* The pool                                                                */
 /* ====================================================================== */
 
+/* The pool's own palette. It lives here rather than in tokens.css because
+   `water.js` reads these four values off the document to colour the shader —
+   they are the event's surface, not app-wide tokens, and keeping them beside
+   the fallback gradient is what stops the two from drifting apart. */
+:root {
+  --pool-shallow: #63c8e4;
+  --pool-deep: #12699c;
+  --pool-glow: #ddf7ff;
+  --pool-caustic-strength: 1;
+}
+
+[data-theme="dark"] {
+  --pool-shallow: #185a7e;
+  --pool-deep: #0a2135;
+  --pool-glow: #8fdcf5;
+  --pool-caustic-strength: 0.7;
+}
+
+/* The gradient the shader replaces — and what is on screen for the frame
+   before its first draw, and on anything that cannot run it. */
 #screen-pool {
-  background: linear-gradient(180deg, #8fe0f0 0%, #4fc0e4 34%, #2e9fd0 72%, #1f85b8 100%);
+  background: linear-gradient(180deg, var(--pool-shallow) 0%, #4fc0e4 34%, #2e9fd0 72%, var(--pool-deep) 100%);
   color: var(--ink);
 }
 
 [data-theme="dark"] #screen-pool {
-  background: linear-gradient(180deg, #16415c 0%, #123b55 42%, #0e2f46 100%);
+  background: linear-gradient(180deg, var(--pool-shallow) 0%, #123b55 48%, var(--pool-deep) 100%);
+}
+
+/* The only text sitting straight on the water. `--ink-muted` is tuned for a
+   card, and on a lit pool it drops under the 4.5:1 small-text line. */
+#screen-pool .topbar .sub {
+  color: var(--ink-soft);
+}
+
+.pool-shader {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Two renderings of the same water would read as neither, so the live shader
+   takes the gradient meshes off the screen. */
+.pool-shader.is-live ~ .pool-caustic {
+  display: none;
 }
 
 /* The water sits behind everything on the screen, including the top bar, and
