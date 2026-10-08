@@ -47,7 +47,7 @@ function Badge({ achievement }) {
   );
 }
 
-export default function ProfileScreen({ active, back }) {
+export default function ProfileScreen({ active, go }) {
   useStoreVersion();
   const [draftName, setDraftName] = useState(state.profile.name);
 
@@ -71,7 +71,7 @@ export default function ProfileScreen({ active, back }) {
     <>
       <TopBar
         title="Profile"
-        onBack={() => { haptics.tapMedium(); audio.sfxTap(); back("home"); }}
+        onBack={() => { haptics.tapMedium(); audio.sfxTap(); go("home", {}, "back"); }}
       />
 
       <div className="screen-body profile-body">

@@ -1,6 +1,12 @@
 /**
  * Journey map.
  *
+ * The journey climbs: level 1 sits at the very bottom and the last chapter is
+ * at the top, so scrolling up is making progress. That means the DOM is built
+ * in reverse — last chapter first, and within each chapter the highest level
+ * first — and each chapter's header sits *below* its levels, so climbing past
+ * it reads as arriving at that chapter.
+ *
  * Levels run along a winding trail, joined by a dashed line measured from the
  * laid-out nodes — so changing the node size, gap or lean can't leave the
  * line pointing at nothing.
@@ -17,7 +23,7 @@ import { state, useStoreVersion, unlockedThrough, chapterProgress, starsEarned }
 import * as audio from "../lib/audio.js";
 import * as haptics from "../lib/haptics.js";
 
-function LevelNode({ level, unlocked, onPlay }) {
+function LevelNode({ level, unlocked, step, onPlay }) {
   const stars = state.progress[level.n]?.stars || 0;
   const isNext = unlocked && !stars;
 
@@ -33,7 +39,9 @@ function LevelNode({ level, unlocked, onPlay }) {
       aria-label={label}
       style={{
         "--lean": level.indexInChapter % 2 ? 1 : -1,
-        "--step": level.indexInChapter
+        // Counted from the bottom, so the arrival animation climbs with the
+        // trail rather than running against it.
+        "--step": step
       }}
       onClick={() => onPlay(level, unlocked)}
     >
@@ -49,8 +57,27 @@ function Chapter({ chapter, index, through, onPlay, trailRef }) {
   const levels = levelsInChapter(index);
   const unlocked = levels[0].n <= through;
 
+  // Highest level first in the DOM, so level 1 ends up at the bottom.
+  const climbing = [...levels].reverse();
+
   return (
     <section className="chapter" data-chapter={chapter.id}>
+      <div className="chapter-path" ref={trailRef}>
+        <svg className="path-line" aria-hidden="true">
+          <polyline />
+        </svg>
+        {climbing.map((level, i) => (
+          <LevelNode
+            key={level.n}
+            level={level}
+            unlocked={level.n <= through}
+            step={climbing.length - 1 - i}
+            onPlay={onPlay}
+          />
+        ))}
+      </div>
+
+      {/* Below its levels: going up, you meet the banner as you enter. */}
       <div className={`chapter-head${unlocked ? "" : " is-locked"}`}>
         <div className="chapter-icon">{chapter.icon}</div>
         <div className="chapter-meta">
@@ -63,20 +90,11 @@ function Chapter({ chapter, index, through, onPlay, trailRef }) {
           <small>{`/ ${progress.maxStars}`}</small>
         </div>
       </div>
-
-      <div className="chapter-path" ref={trailRef}>
-        <svg className="path-line" aria-hidden="true">
-          <polyline />
-        </svg>
-        {levels.map((level) => (
-          <LevelNode key={level.n} level={level} unlocked={level.n <= through} onPlay={onPlay} />
-        ))}
-      </div>
     </section>
   );
 }
 
-export default function MapScreen({ go, back }) {
+export default function MapScreen({ go }) {
   useStoreVersion();
   const listRef = useRef(null);
   const pathRefs = useRef([]);
@@ -134,8 +152,8 @@ export default function MapScreen({ go, back }) {
     return () => observer.disconnect();
   }, [drawTrails]);
 
-  // Land on the level the player is about to attempt, not at the top of a
-  // list they have already finished.
+  // Land on the level the player is about to attempt. For a new player that
+  // is level 1 at the very bottom; later it is somewhere up the climb.
   useEffect(() => {
     const container = listRef.current;
     const target = container?.querySelector(".node.is-next");
@@ -160,21 +178,25 @@ export default function MapScreen({ go, back }) {
       <TopBar
         title="Journey"
         subtitle="Tap a level to play"
-        onBack={() => { haptics.tapMedium(); audio.sfxTap(); back("home"); }}
+        onBack={() => { haptics.tapMedium(); audio.sfxTap(); go("home", {}, "back"); }}
         trailing={<span className="chip">⭐<b>{starsEarned()}</b></span>}
       />
 
       <div className="screen-body map-body" ref={listRef}>
-        {CHAPTERS.map((chapter, i) => (
-          <Chapter
-            key={chapter.id}
-            chapter={chapter}
-            index={i}
-            through={through}
-            onPlay={onPlay}
-            trailRef={(node) => { pathRefs.current[i] = node; }}
-          />
-        ))}
+        {/* Last chapter first, so chapter one lands at the bottom. */}
+        {[...CHAPTERS].reverse().map((chapter, i) => {
+          const index = CHAPTERS.length - 1 - i;
+          return (
+            <Chapter
+              key={chapter.id}
+              chapter={chapter}
+              index={index}
+              through={through}
+              onPlay={onPlay}
+              trailRef={(node) => { pathRefs.current[index] = node; }}
+            />
+          );
+        })}
       </div>
     </>
   );

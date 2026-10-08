@@ -69,7 +69,7 @@ export default function App() {
   // `visited` and `params` come from the router: a screen stays mounted once
   // visited, so returning to it restores scroll position — and, for the play
   // screen, the level in progress.
-  const { route, params, visited, dir, go, replace, back } = useRouter();
+  const { route, params, visited, dir, go, replace } = useRouter();
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstall, setShowInstall] = useState(false);
 
@@ -166,7 +166,6 @@ export default function App() {
                 params={params[name] || EMPTY_PARAMS}
                 go={go}
                 replace={replace}
-                back={back}
               />
             </section>
           );
