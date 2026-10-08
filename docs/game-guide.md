@@ -173,9 +173,6 @@ pool would sit oddly under a map of cartoon floats:
   on forever like an outline.
 - The glints are **added by hand**: four-point stars on a sparse jittered
   grid, blinking on their own phases.
-- Time is **held on twos**, quantised to 12 a second. Painted animation does
-  not move on every frame, and that is the single strongest cue that this was
-  drawn rather than computed.
 - The speeds are **not a taste knob**. See below.
 
 ### How fast the water moves
@@ -192,7 +189,7 @@ short ones; the angular frequencies in `swell()` are `C * sqrt(k)` for one
 calibration `C`, which is that relation. The ordering is the part the eye
 reads as water, more than any absolute number.
 
-Two consequences worth writing down:
+Three consequences worth writing down:
 
 - **Every component travels the same way.** Mixed signs make the field stand
   and boil in place, and boiling reads as "too fast" however slowly it is run.
@@ -203,8 +200,12 @@ Two consequences worth writing down:
   measures as 0.29m/s (about 39px/s) across the screen. Earlier attempts ran
   at 0.20m/s and then 0.10m/s, which is why they read as syrup: that is not
   slow water, it is water doing something water cannot do.
+- **Time runs continuously.** It was quantised to 12 a second for a while, to
+  borrow the way painted animation runs on twos. That reads as a style at a
+  brisk pace; at this one the surface travels under a pixel per frame, so
+  holding it only turned smooth drift into visible stutter.
 
-The one deliberate liberty: the painted shapes are metres across, and real
+The one liberty left: the painted shapes are metres across, and real
 waves that long travel at 2-3m/s and would cross this view in about a second.
 They are moved at the capillary-minimum speed instead. The relationships are
 physical; the absolute is anchored at the slowest water that can exist.
@@ -311,7 +312,7 @@ animation library, no three.js, and nothing fetched at runtime.
 | Screen changes | The arriving screen slides in from the direction of travel; the leaving one only fades |
 | Reward figures | `useCountUp` eases the number up, then kicks when it lands |
 | Pool floats | Per-ring `--bob-dur` and `--bob-delay`, so no two are in step; the bob is on an inner element so the tap target never moves |
-| Pool water | A WebGL fragment shader (`lib/water.js`): flat poured tones, foam drawn as tapering contour strokes along the swell, and the whole surface held on twos at 12 a second |
+| Pool water | A WebGL fragment shader (`lib/water.js`): flat poured tones, foam drawn as tapering contour strokes along the swell, drifting at a speed the dispersion relation sets |
 
 Two rules the pass follows:
 

@@ -4,10 +4,10 @@
  * The CSS version of this water is two crossing meshes of gradient bands —
  * cheap, and it reads as water from a distance, but it repeats and it cannot
  * hold a shape. This paints the pool instead: flat poured tones, foam drawn
- * as contour strokes along the swell, glints added by hand, and the whole
- * surface held on twos the way painted animation is. It is deliberately not
- * a simulation — a photoreal pool would sit oddly under a map of cartoon
- * floats.
+ * as contour strokes along the swell, and glints added by hand. It is
+ * deliberately not a simulation — a photoreal pool would sit oddly under a
+ * map of cartoon floats — but how fast it moves is not a matter of taste:
+ * see the dispersion note on `swell()`.
  *
  * No library. The whole renderer is one full-screen triangle and one shader,
  * in the same spirit as `particles.js` — which hand-rolls its own canvas
@@ -108,19 +108,19 @@ void main() {
      than curling into blobs. */
   vec2 p = uv * 6.9 * vec2(0.82, 1.22);
 
-  /* Held frames. Painted animation runs on twos and threes rather than on
-     every frame, and water drawn by hand moves in steps — so the whole
-     surface is quantised to 12 a second. It is the single strongest cue that
-     this was painted rather than simulated.
+  /* Time runs continuously, so the surface moves at whatever rate the display
+     refreshes. It was quantised to 12 a second for a while — painted
+     animation runs on twos, and the stepping was a strong cue that this was
+     drawn rather than computed — but at this speed the surface travels less
+     than a pixel per frame, and holding it turned that into a visible stutter
+     rather than a style.
 
-     Speed is no longer a free parameter: it lives in the angular frequencies
-     inside swell(), where the dispersion relation puts it. What is left here
-     is the cadence, and the glints' own clock — capillary ripples oscillate
-     far faster than the swell they ride on, so the sparkle twinkles while the
-     surface drifts. */
-  float held = floor(uTime * 12.0) / 12.0;
-  float t = held;
-  float tSpark = held * 1.2;
+     Speed is not a free parameter here: it lives in the angular frequencies
+     inside swell(), where the dispersion relation puts it. What is left is
+     the glints' own clock — capillary ripples oscillate far faster than the
+     swell they ride on, so the sparkle twinkles while the surface drifts. */
+  float t = uTime;
+  float tSpark = uTime * 1.2;
 
   float h = swell(p, t);
   float depth = clamp(gl_FragCoord.y / uRes.y, 0.0, 1.0);
