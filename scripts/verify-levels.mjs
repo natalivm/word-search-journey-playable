@@ -17,6 +17,7 @@ const { levelAt, dailyLevel, todayKey, TOTAL_LEVELS, DIRS } = await import(
   join(root, "app/src/lib/levels.js")
 );
 const { generate } = await import(join(root, "app/src/lib/generator.js"));
+const { poolLevels, POOL_LEVELS } = await import(join(root, "app/src/lib/pool.js"));
 
 const failures = [];
 let boards = 0;
@@ -45,6 +46,10 @@ function check(level) {
   for (const entry of puzzle.words) {
     if (seen.has(entry.word)) fail(`${entry.word} is hidden twice`);
     seen.add(entry.word);
+
+    if (level.minWordLength && entry.word.length < level.minWordLength) {
+      fail(`${entry.word} is shorter than this level's ${level.minWordLength}-letter floor`);
+    }
 
     if (!level.directions.includes(entry.dir)) {
       fail(`${entry.word} runs ${entry.dir}, which this level should not use`);
@@ -81,6 +86,14 @@ function check(level) {
 }
 
 for (let n = 1; n <= TOTAL_LEVELS; n += 1) check(levelAt(n));
+
+// The Pool Party rings: bigger boards, a longer-word floor and all eight
+// directions, so they are the likeliest levels to fail to pack.
+const rings = poolLevels();
+if (rings.length !== POOL_LEVELS) {
+  failures.push(`pool should hold ${POOL_LEVELS} rings, holds ${rings.length}`);
+}
+for (const ring of rings) check(ring);
 
 // A year of daily puzzles, which draw from the same packs on a date seed.
 const start = new Date(2026, 0, 1);

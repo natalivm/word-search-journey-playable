@@ -337,6 +337,19 @@ button {
   transition: transform var(--dur-mid) var(--ease-spring);
 }
 
+/* Secondary icon buttons sit in a row of chips, so they match their height
+   while keeping a tap target the thumb can still find. */
+.icon-btn--sm {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
+}
+
+.icon-btn--sm svg {
+  width: 18px;
+  height: 18px;
+}
+
 .icon-btn:active {
   transform: scale(0.88);
   transition-duration: 60ms;

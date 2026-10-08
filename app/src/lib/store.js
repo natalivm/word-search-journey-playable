@@ -8,6 +8,7 @@
 
 import { useSyncExternalStore } from "react";
 import { TOTAL_LEVELS, LEVELS_PER_CHAPTER, todayKey } from "./levels.js";
+import { POOL_LEVELS, POOL_PRIZE_COINS, POOL_PRIZE_XP } from "./pool.js";
 
 const KEY = "wsj.save";
 const VERSION = 1;
@@ -63,6 +64,9 @@ function defaults() {
       fastestWordMs: 0
     },
     daily: { lastDate: "", streak: 0, best: 0, history: {} },
+    // Pool Party event. Ring number -> { stars, bestMs, hints, plays, flawless },
+    // and the moment the grand prize was claimed (0 until it is).
+    pool: { progress: {}, trophyAt: 0 },
     achievements: {}, // id -> unlockedAt
     meta: { lastPlayed: 0, launches: 0, seenTutorial: false }
   };
@@ -194,6 +198,32 @@ export function chapterProgress(chapterIndex) {
 
 export const dailyDone = () => state.daily.lastDate === todayKey();
 
+/* -- Pool Party ---------------------------------------------------------- */
+
+/** Rings finished at least once. */
+export const poolRingsCleared = () =>
+  Object.values(state.pool.progress).filter((p) => p?.stars > 0).length;
+
+export const poolStars = () =>
+  Object.values(state.pool.progress).reduce((sum, p) => sum + (p?.stars || 0), 0);
+
+export const poolStarsPossible = () => POOL_LEVELS * 3;
+
+/**
+ * Highest ring the player may enter. The event is strictly sequential — the
+ * point of a challenge ladder is that you cannot skip the rung you are stuck
+ * on — so this is the first unfinished ring.
+ */
+export function poolUnlockedThrough() {
+  let n = 1;
+  while (n <= POOL_LEVELS && state.pool.progress[n]?.stars > 0) n += 1;
+  return Math.min(POOL_LEVELS, n);
+}
+
+export const isPoolUnlocked = (n) => n <= poolUnlockedThrough();
+export const poolAllCleared = () => poolRingsCleared() >= POOL_LEVELS;
+export const poolTrophyWon = () => Boolean(state.pool.trophyAt);
+
 /* ---------------------------------------------------------------------- */
 /* Mutations                                                               */
 /* ---------------------------------------------------------------------- */
@@ -267,6 +297,57 @@ export function recordDaily(dateKey, { stars, ms }) {
   commit();
 
   return { already: false, streak: state.daily.streak };
+}
+
+/**
+ * Record a finished ring.
+ *
+ * Deliberately kept out of `stats.levelsCompleted` and the perfect/flawless
+ * counters: those drive the journey achievements, and ten event rings should
+ * not hand somebody "finish all 80 levels". The honest totals — words, coins,
+ * time — still count, because the player really did play them.
+ */
+export function recordPoolRing(n, { stars, ms, hints, flawless }) {
+  const prev = state.pool.progress[n];
+  const isFirst = !prev?.stars;
+
+  state.pool.progress[n] = {
+    stars: Math.max(stars, prev?.stars || 0),
+    bestMs: prev?.bestMs ? Math.min(prev.bestMs, ms) : ms,
+    hints: (prev?.hints || 0) + hints,
+    plays: (prev?.plays || 0) + 1,
+    flawless: Boolean(prev?.flawless) || flawless
+  };
+
+  state.stats.totalMs += ms;
+  if (!state.stats.bestMs || ms < state.stats.bestMs) state.stats.bestMs = ms;
+  state.meta.lastPlayed = Date.now();
+
+  commit();
+  return { isFirst, improved: isFirst || stars > (prev?.stars || 0) };
+}
+
+/**
+ * Claim the Pool Party grand prize. Idempotent: the celebration replays if
+ * the player closes the app on it, so the payout must not.
+ *
+ * @returns {{coins:number, xp:number, leveledUp:boolean}|null} null if already claimed.
+ */
+export function claimPoolTrophy() {
+  if (state.pool.trophyAt || !poolAllCleared()) return null;
+
+  const before = playerLevel().level;
+  state.pool.trophyAt = Date.now();
+  state.profile.coins += POOL_PRIZE_COINS;
+  state.stats.coinsEarned += POOL_PRIZE_COINS;
+  state.profile.xp += POOL_PRIZE_XP;
+  commit();
+
+  return {
+    coins: POOL_PRIZE_COINS,
+    xp: POOL_PRIZE_XP,
+    leveledUp: playerLevel().level > before
+  };
 }
 
 export function countWordFound(ms) {

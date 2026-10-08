@@ -7,6 +7,7 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/screens.css";
 import "./styles/game.css";
+import "./styles/pool.css";
 
 import App from "./App.jsx";
 import { applyDisplaySettings, watchSystemTheme } from "./lib/theme.js";

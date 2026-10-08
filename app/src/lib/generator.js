@@ -14,7 +14,9 @@ import { FILLER_POOL } from "./words.js";
 /** Candidate words for a level: right length, de-duplicated, seeded order. */
 function pickWords(level, rng) {
   const maxLen = level.size;
-  const minLen = level.size <= 7 ? 3 : 4;
+  // A level can raise the floor — the Pool Party rings do, because short
+  // words are where an otherwise hard board gets its easy finds.
+  const minLen = level.minWordLength ?? (level.size <= 7 ? 3 : 4);
 
   const pool = rng.shuffle(
     [...new Set(level.chapter.words)].filter(

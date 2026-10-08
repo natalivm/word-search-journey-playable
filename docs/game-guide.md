@@ -16,13 +16,15 @@ into the game. CI builds it; `dist/` is not committed.
 
 | Screen | Purpose |
 | --- | --- |
-| Home | Player strip, wallet, one primary **Continue** action, daily puzzle |
+| Home | Player strip, wallet, profile and settings icons, one primary **Continue** action, daily puzzle and journey |
 | Journey map | 10 chapters x 8 levels climbing a winding trail, with stars and locks |
+| Pool Party | The event map: 10 very hard rings floating up a pool, and the champion celebration |
 | Play | The puzzle board, word list, timer, hints, pause |
-| Profile | Avatar, name, 10 lifetime stats, 12 achievements |
+| Profile | Avatar, name, 10 lifetime stats, 13 achievements |
 | Settings | Sound, display and accessibility options, reset |
 
-Plus a daily puzzle, seeded by date, that keeps a streak.
+Plus a daily puzzle, seeded by date, that keeps a streak, and the Pool Party
+event, reached from its own widget on the main menu.
 
 ## Architecture
 
@@ -40,7 +42,7 @@ app/
     components/
       Icon.jsx  Stars.jsx  ProgressBar.jsx  TopBar.jsx  Overlays.jsx
     screens/
-      HomeScreen.jsx  MapScreen.jsx  PlayScreen.jsx
+      HomeScreen.jsx  MapScreen.jsx  PoolScreen.jsx  PlayScreen.jsx
       ProfileScreen.jsx  SettingsScreen.jsx
     lib/                 framework-agnostic; no JSX, mostly no React
       router.js          useRouter: hash routing, history, per-screen params
@@ -51,11 +53,12 @@ app/
       rng.js             seeded PRNG (mulberry32)
       words.js           10 themed word packs + filler letter frequencies
       levels.js          difficulty curve, star thresholds, rewards
+      pool.js            the Pool Party event: 10 hard rings, float colours, prize
       generator.js       backtracking word placement
       achievements.js    badge definitions and checks
       audio.js           synthesized SFX and music (no audio files)
       haptics.js         navigator.vibrate wrapper
-    styles/              tokens.css base.css screens.css game.css
+    styles/              tokens.css base.css screens.css game.css pool.css
 ```
 
 Everything in `lib/` except `router.js` and `store.js` is plain JavaScript with
@@ -119,17 +122,76 @@ laid-out nodes in DOM order, so it follows whatever order they are in, and the
 "open on the level you are about to play" scroll finds `.node.is-next`
 wherever it ends up — which for a new player is the bottom of the list.
 
+### Pool Party: the event
+
+An optional ladder of ten rings, opened from its own widget on the main menu
+and laid out on `PoolScreen`. It exists to give a player who has learned the
+game somewhere to find out how good they got.
+
+The rings are hard on purpose, and `lib/pool.js` holds every lever in one
+place: all eight directions from ring one, a five-letter floor on the word
+pool (short words are where an otherwise hard board gives up its easy finds),
+boards of 11 to 13, par times about two thirds of the journey's for the same
+shape of board, and `assist: false`, which switches off the idle nudge the
+journey leans on. A ring is a descriptor of exactly the shape `levels.js`
+produces, so the generator, the play screen and the verifier need no special
+case beyond the `isPool` flag.
+
+Progress is sequential — you cannot skip the rung you are stuck on — and lives
+under `pool` in the save file, deliberately *outside* `stats.levelsCompleted`
+and the perfect/flawless counters: ten event rings should not hand somebody
+"finish all 80 levels". The honest totals (words found, coins, time) still
+count.
+
+Clearing all ten opens the celebration, which is derived rather than stored:
+it is owed for as long as `pool.trophyAt` is 0, so closing the app on it
+replays it instead of losing the trophy, and `claimPoolTrophy()` pays out
+exactly once however many times it is called.
+
+The floats bob, and that is the only part with a real constraint behind it.
+Each element in a ring owns exactly one transform — the button leans along the
+trail, `.ring-float` bobs, `.ring-body` squashes under a thumb — so nothing
+fights, and because the bob is on an inner element the button's own box never
+moves (see the rule under **Animation** below). Period and phase come from
+custom properties set per ring, because ten floats moving in unison read as a
+sprite sheet and ten moving independently read as water. Every looping
+animation on the screen is scoped to `.screen.is-active`: screens stay mounted,
+and an unscoped loop would keep ten floats, two caustic layers and three
+drifters animating where nobody can see them.
+
+One rendering note worth keeping: a float is a disc with its middle masked
+out, so the pool shows through the hole. That means anything which has to stay
+visible through the hole — the ring number — is a *sibling* of the masked
+element, not a child, and the drop shadow lives on the parent, because a
+filter on a masked element is cut away with everything outside the mask.
+
 ### Navigation: back is "up"
 
-The back button in a screen's top bar goes to the home screen, not to the
-previous history entry. Home is the hub every other screen is reached from, so
-"back" meaning "up to the hub" is what players expect — and it avoids landing
-somebody on the play screen they just finished when they came to the map from
-a win card. It passes `"back"` as the transition direction so the slide still
-matches the gesture.
+Back is an *up* control, not a history control. Every screen has exactly one
+parent — home is the root, the map and the daily puzzle hang off it, a level
+hangs off the map (`parentOf` in `lib/router.js`) — and both the in-app back
+buttons and the Android system back gesture walk that chain. Home is the hub
+every other screen is reached from, so "up to the hub" is what players expect,
+and it avoids landing somebody back in the puzzle they just quit.
 
-The browser and Android system back are left alone: they step through history
-via `popstate`, which is what those controls are for.
+The system gesture only follows that chain because the router keeps the browser
+history at most two entries deep: a home root, plus one entry for the screen on
+show. A pop therefore always lands on home, and when the screen being left has
+a parent that is not home, the router rebuilds that parent's entry on top of
+the root. A stack that recorded where the player *had been* would put the
+puzzle behind the map after "Quit to map", and the next back press would drop
+them straight back into it.
+
+Three details keep that stack honest. Entries the router writes carry a state
+object, so an entry without one means the hash was changed from outside the
+router (a manual edit, a link) and is adopted as a step rather than read as a
+back press. `popstate` and `hashchange` can both fire for one move, so they
+share a handler that returns early once the move is already reflected. And
+whatever hash the page is opened with is normalised on boot, so even a deep
+link to a level has the main menu behind it.
+
+In-app back buttons pass `"back"` as the transition direction so the slide
+still matches the gesture.
 
 ### Screens stay mounted
 
@@ -178,6 +240,8 @@ whole pass costs about 4 KB gzipped.
 | Particles | One shared canvas (`lib/particles.js`) with gravity, drag and tumble |
 | Screen changes | The arriving screen slides in from the direction of travel; the leaving one only fades |
 | Reward figures | `useCountUp` eases the number up, then kicks when it lands |
+| Pool floats | Per-ring `--bob-dur` and `--bob-delay`, so no two are in step; the bob is on an inner element so the tap target never moves |
+| Pool water | Two crossing meshes of soft gradient bands, translated and scaled — no blur filter, so it stays cheap on a phone |
 
 Two rules the pass follows:
 
@@ -257,7 +321,7 @@ of reaching the site.
 ## Saved data
 
 One `localStorage` key, `wsj.save`, holding a versioned object (profile,
-settings, progress, stats, daily streak, achievements). Writes are debounced;
+settings, progress, stats, daily streak, Pool Party progress, achievements). Writes are debounced;
 reads tolerate a corrupt or missing file by falling back to defaults, so a
 blocked-storage browser still plays — it just will not remember. Nothing is
 sent anywhere; there is no network call after load.

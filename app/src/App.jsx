@@ -17,6 +17,7 @@ import { clearParticles } from "./lib/particles.js";
 
 import HomeScreen from "./screens/HomeScreen.jsx";
 import MapScreen from "./screens/MapScreen.jsx";
+import PoolScreen from "./screens/PoolScreen.jsx";
 import PlayScreen from "./screens/PlayScreen.jsx";
 import ProfileScreen from "./screens/ProfileScreen.jsx";
 import SettingsScreen from "./screens/SettingsScreen.jsx";
@@ -24,6 +25,7 @@ import SettingsScreen from "./screens/SettingsScreen.jsx";
 const COMPONENTS = {
   home: HomeScreen,
   map: MapScreen,
+  pool: PoolScreen,
   play: PlayScreen,
   profile: ProfileScreen,
   settings: SettingsScreen
@@ -35,6 +37,7 @@ const EMPTY_PARAMS = {};
 const LABELS = {
   home: "Home",
   map: "Journey map",
+  pool: "Pool Party",
   play: "Puzzle",
   profile: "Profile",
   settings: "Settings"

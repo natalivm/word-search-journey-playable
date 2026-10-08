@@ -26,9 +26,10 @@ import { STAR_D } from "../components/Stars.jsx";
 import { toast, announce, confetti } from "../lib/overlays.js";
 import { generate } from "../lib/generator.js";
 import { levelAt, dailyLevel, starsFor, rewardFor, TOTAL_LEVELS } from "../lib/levels.js";
+import { poolLevel, poolRewardFor, POOL_LEVELS } from "../lib/pool.js";
 import {
-  state, addCoins, spendCoins, addXp, recordLevel, recordDaily,
-  countWordFound, recordHintUsed, isUnlocked
+  state, addCoins, spendCoins, addXp, recordLevel, recordDaily, recordPoolRing,
+  countWordFound, recordHintUsed, isUnlocked, isPoolUnlocked
 } from "../lib/store.js";
 import { checkAchievements } from "../lib/achievements.js";
 import { formatTime } from "../lib/format.js";
@@ -337,6 +338,9 @@ function Level({ level, active, go, onRestart }) {
   );
 
   useEffect(() => {
+    // The Pool Party rings opt out: a nudge is a difficulty setting, and the
+    // event's whole premise is that there isn't one.
+    if (level.assist === false) return undefined;
     if (!state.settings.beginnerHints || isOver || paused) return undefined;
 
     assistRef.current = setTimeout(() => {
@@ -346,7 +350,7 @@ function Level({ level, active, go, onRestart }) {
     }, IDLE_ASSIST_MS);
 
     return () => clearTimeout(assistRef.current);
-  }, [puzzle.words, foundWords, isOver, paused]);
+  }, [level.assist, puzzle.words, foundWords, isOver, paused]);
 
   /* -- selection ------------------------------------------------------- */
 
@@ -393,11 +397,18 @@ function Level({ level, active, go, onRestart }) {
     // cleanup adds the live span to the accumulated total.
     const ms = elapsedMs();
     const stars = starsFor(level, { seconds: ms / 1000, hintsUsed: hintsRef.current });
-    const reward = rewardFor(level, stars);
+    const reward = level.isPool ? poolRewardFor(level, stars) : rewardFor(level, stars);
     const flawless = wrongRef.current === 0 && hintsRef.current === 0;
 
     let note;
-    if (level.isDaily) {
+    if (level.isPool) {
+      const record = recordPoolRing(level.poolIndex, { stars, ms, hints: hintsRef.current, flawless });
+      note = record.isFirst
+        ? level.isFinalRing
+          ? "The last ring is yours — claim the trophy!"
+          : `Ring ${level.poolIndex} cleared. ${POOL_LEVELS - level.poolIndex} to go.`
+        : record.improved ? "New personal best on this ring!" : "Nice run — your best stands.";
+    } else if (level.isDaily) {
       const daily = recordDaily(level.dateKey, { stars, ms });
       note = daily.already
         ? "Already counted for today — nice replay."
@@ -741,8 +752,20 @@ function Level({ level, active, go, onRestart }) {
     );
   };
 
-  const nextN = level.isDaily ? null : level.n + 1;
-  const hasNext = Boolean(nextN && nextN <= TOTAL_LEVELS);
+  // Where this level came from, and where "next" goes — the journey, the
+  // event ladder and the daily puzzle each answer differently.
+  const quitTo = level.isPool ? "pool" : level.isDaily ? "home" : "map";
+  const quitLabel = level.isPool ? "Pool" : level.isDaily ? "Home" : "Map";
+
+  const nextN = level.isPool
+    ? (level.isFinalRing ? null : level.poolIndex + 1)
+    : level.isDaily ? null : level.n + 1;
+  const hasNext = Boolean(nextN && (level.isPool || nextN <= TOTAL_LEVELS));
+  const nextParams = level.isPool ? { pool: String(nextN) } : { n: String(nextN) };
+  const nextLabel = level.isPool ? "Next ring" : "Next level";
+  const finishLabel = level.isPool
+    ? (level.isFinalRing ? "Claim your trophy" : "Back to the pool")
+    : level.isDaily ? "Back to home" : "Back to map";
 
   return (
     <>
@@ -755,7 +778,9 @@ function Level({ level, active, go, onRestart }) {
           <span>
             {level.isDaily
               ? `${level.chapter.icon} ${level.chapter.name}`
-              : `${level.chapter.icon} Level ${level.n} of ${TOTAL_LEVELS}`}
+              : level.isPool
+                ? `${level.chapter.icon} Ring ${level.poolIndex} of ${POOL_LEVELS}`
+                : `${level.chapter.icon} Level ${level.n} of ${TOTAL_LEVELS}`}
           </span>
         </div>
         <div className="play-meta">
@@ -873,8 +898,12 @@ function Level({ level, active, go, onRestart }) {
                 Settings
               </button>
             </div>
-            <button className="btn btn--ghost btn--block" type="button" onClick={() => { resume(); go("map"); }}>
-              Quit to map
+            <button
+              className="btn btn--ghost btn--block"
+              type="button"
+              onClick={() => { resume(); go(quitTo); }}
+            >
+              {`Quit to ${quitLabel.toLowerCase()}`}
             </button>
           </div>
         </div>
@@ -915,14 +944,14 @@ function Level({ level, active, go, onRestart }) {
             <button
               className="btn btn--primary btn--block btn--lg"
               type="button"
-              onClick={() => (hasNext ? go("play", { n: String(nextN) }) : go(level.isDaily ? "home" : "map"))}
+              onClick={() => (hasNext ? go("play", nextParams) : go(quitTo))}
             >
-              {hasNext ? "Next level" : level.isDaily ? "Back to home" : "Back to map"}
+              {hasNext ? nextLabel : finishLabel}
             </button>
             <div className="row">
               <button className="btn btn--block" type="button" onClick={onRestart}>Replay</button>
-              <button className="btn btn--block" type="button" onClick={() => go(level.isDaily ? "home" : "map")}>
-                {level.isDaily ? "Home" : "Map"}
+              <button className="btn btn--block" type="button" onClick={() => go(quitTo)}>
+                {quitLabel}
               </button>
             </div>
           </div>
@@ -939,19 +968,25 @@ function Level({ level, active, go, onRestart }) {
 export default function PlayScreen({ params, active, go, replace }) {
   const [attempt, setAttempt] = useState(0);
 
-  const level = useMemo(
-    () => (params.daily ? dailyLevel(params.daily) : levelAt(Number(params.n) || 1)),
-    [params.daily, params.n]
-  );
+  const level = useMemo(() => {
+    if (params.pool) return poolLevel(Number(params.pool));
+    if (params.daily) return dailyLevel(params.daily);
+    return levelAt(Number(params.n) || 1);
+  }, [params.daily, params.n, params.pool]);
 
   // Deep links and the back button can both aim at a level that is still locked.
-  const locked = !level.isDaily && !isUnlocked(level.n);
+  const locked = level.isPool
+    ? !isPoolUnlocked(level.poolIndex)
+    : !level.isDaily && !isUnlocked(level.n);
 
   useEffect(() => {
     if (!locked || !active) return;
-    replace("map");
-    toast("That level is still locked", "bad");
-  }, [locked, active, replace]);
+    replace(level.isPool ? "pool" : "map");
+    toast(
+      level.isPool ? "Clear the ring below this one first" : "That level is still locked",
+      "bad"
+    );
+  }, [locked, active, level.isPool, replace]);
 
   if (locked) return null;
 
