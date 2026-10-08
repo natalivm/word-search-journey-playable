@@ -32,7 +32,10 @@ function LevelNode({ level, onPlay }) {
       type="button"
       disabled={!unlocked}
       aria-label={label}
-      style={{ "--lean": level.indexInChapter % 2 ? 1 : -1 }}
+      style={{
+        "--lean": level.indexInChapter % 2 ? 1 : -1,
+        "--step": level.indexInChapter
+      }}
       onClick={() => onPlay(level, unlocked)}
     >
       <span className="node-num">{unlocked ? level.n : ""}</span>

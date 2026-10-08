@@ -5,6 +5,24 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { subscribe, getSnapshot, closeSheet } from "../lib/overlays.js";
+import { attach, detach, resize } from "../lib/particles.js";
+
+/** The shared particle surface. Covers the app frame, never takes input. */
+function ParticleCanvas() {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    attach(ref.current);
+    const observer = new ResizeObserver(resize);
+    if (ref.current) observer.observe(ref.current);
+    return () => {
+      observer.disconnect();
+      detach();
+    };
+  }, []);
+
+  return <canvas id="fxCanvas" ref={ref} aria-hidden="true" />;
+}
 
 function Sheet({ sheet }) {
   const ref = useRef(null);
@@ -77,28 +95,11 @@ function Sheet({ sheet }) {
 }
 
 export default function Overlays() {
-  const { toasts, sheet, confetti, live } = useSyncExternalStore(
-    subscribe,
-    getSnapshot,
-    getSnapshot
-  );
+  const { toasts, sheet, live } = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   return (
     <>
-      <div id="fxHost" aria-hidden="true">
-        {confetti?.pieces.map((p) => (
-          <i
-            key={p.key}
-            style={{
-              left: p.left,
-              background: p.background,
-              animationDelay: p.animationDelay,
-              animationDuration: p.animationDuration,
-              transform: p.transform
-            }}
-          />
-        ))}
-      </div>
+      <ParticleCanvas />
 
       <div id="toastHost" aria-hidden="true">
         {toasts.map((t) => (

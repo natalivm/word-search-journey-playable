@@ -139,6 +139,35 @@ found word read as a coloured capsule with the letters on top, the way a
 printed word search does. All three layers share one grid template, and cell
 centres are measured once per resize (`measure()`), never per pointer move.
 
+## Animation
+
+Everything is CSS or canvas — no animation library, and no three.js. The
+whole pass costs about 4 KB gzipped.
+
+| Effect | How |
+| --- | --- |
+| Board reveal | A diagonal wave: `--wave` is `row + col`, scaled to an `animation-delay` |
+| Found word | Letters flip in real 3D (`perspective` + `rotateY`), staggered along the word by `--pop` |
+| Highlight capsule | The SVG line carries `pathLength="1"`, so one `stroke-dashoffset` keyframe draws any word at any length or angle |
+| Word pill | A drawn rule sweeps across instead of `text-decoration` appearing |
+| Particles | One shared canvas (`lib/particles.js`) with gravity, drag and tumble |
+| Screen changes | The arriving screen slides in from the direction of travel; the leaving one only fades |
+| Reward figures | `useCountUp` eases the number up, then kicks when it lands |
+
+Two rules the pass follows:
+
+- **Nothing that moves a tap target loops forever.** The "you are here" node
+  on the map pulses its glow and ring, not its position. A control that is
+  still drifting when a thumb arrives is harder to hit, and automation and
+  assistive tooling both treat a never-settling element as unclickable.
+- **The entry cascade is scoped to `.board.is-entering`**, a flag cleared once
+  it finishes. Otherwise toggling any class later — a letter flipping — would
+  swap the active animation and replay the whole board reveal.
+
+Reduced motion is honoured twice over: `prefers-reduced-motion` and the
+in-game setting both collapse every duration and disable the canvas outright,
+and `particles.js` refuses to emit rather than drawing into a hidden canvas.
+
 ## Mobile UX decisions worth knowing
 
 - **Drags snap to the nearest of eight directions** and track the finger by
@@ -174,6 +203,30 @@ centres are measured once per resize (`measure()`), never per pointer move.
 - All touch targets are at least 44x44 px.
 - Live region announces finds, hints and results.
 - Inactive screens are `inert`, so focus and screen readers never reach them.
+
+## Built for a GitHub Pages project path
+
+The site is served from `https://<user>.github.io/<repo>/`, which rules out a
+few things that would otherwise be the obvious choice:
+
+- **Hash routing, not the History API for routes.** Pages cannot rewrite
+  unknown paths to `index.html`, so `/<repo>/game/play/12` would 404 on a
+  refresh. The hash keeps every deep link a request for `index.html`.
+  `history.pushState` is still used, but only to mirror navigation so the
+  Android back gesture works.
+- **`base: "./"` in `vite.config.js`.** Relative asset URLs mean the build
+  does not need to know the repository name.
+- **A relative service worker registration.** `./sw.js` scopes the worker to
+  `/<repo>/game/`; registering `/sw.js` would ask to control the whole
+  `github.io` domain and be rejected.
+- **A relative manifest.** `start_url`, `scope`, `id`, icon paths and
+  shortcuts all resolve against wherever the manifest lands.
+- **`.nojekyll`.** Without it Jekyll silently drops files whose names start
+  with an underscore.
+
+`npm run check:pages` asserts every one of these against the built output, so
+the classic "worked locally, 404s in production" regression fails CI instead
+of reaching the site.
 
 ## Saved data
 

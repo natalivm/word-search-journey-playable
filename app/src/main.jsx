@@ -28,8 +28,16 @@ setTimeout(() => {
   setTimeout(() => boot?.remove(), 600);
 }, 320);
 
-if ("serviceWorker" in navigator && location.protocol === "https:") {
+// Service workers need a secure context. GitHub Pages is HTTPS; localhost
+// counts too, which is what makes the offline path testable before deploying.
+const secureContext =
+  location.protocol === "https:" ||
+  ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+
+if ("serviceWorker" in navigator && secureContext) {
   window.addEventListener("load", () => {
+    // Relative, so the worker's scope is the directory the game is served
+    // from — /<repo>/game/ on Pages, not the domain root.
     navigator.serviceWorker.register("./sw.js").catch(() => {
       // Offline play is a bonus, not a requirement.
     });

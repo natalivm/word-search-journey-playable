@@ -161,17 +161,34 @@ button {
     calc(var(--safe-left) + var(--sp-4));
   opacity: 0;
   visibility: hidden;
-  transform: translateY(10px);
   transition:
     opacity var(--dur-mid) var(--ease-out),
-    transform var(--dur-mid) var(--ease-out),
     visibility var(--dur-mid);
 }
 
 .screen.is-active {
   opacity: 1;
   visibility: visible;
-  transform: none;
+}
+
+/* The arriving screen slides in from the direction of travel; the leaving
+   one only fades. Animating both would read as two screens fighting. */
+#screens[data-dir="forward"] .screen.is-active {
+  animation: screenInRight var(--dur-slow) var(--ease-out);
+}
+
+#screens[data-dir="back"] .screen.is-active {
+  animation: screenInLeft var(--dur-slow) var(--ease-out);
+}
+
+@keyframes screenInRight {
+  from { opacity: 0; transform: translate3d(26px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes screenInLeft {
+  from { opacity: 0; transform: translate3d(-26px, 0, 0); }
+  to { opacity: 1; transform: none; }
 }
 
 /* The scrolling body of a screen. Momentum scroll, no rubber-band chain. */
@@ -232,14 +249,15 @@ button {
   font-weight: var(--fw-black);
   box-shadow: var(--shadow-sm);
   transition:
-    transform var(--dur-fast) var(--ease-out),
+    transform var(--dur-mid) var(--ease-spring),
     box-shadow var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out);
 }
 
 .btn:active {
-  transform: translateY(2px) scale(0.985);
+  transform: translateY(2px) scale(0.97);
   box-shadow: none;
+  transition-duration: 60ms;
 }
 
 .btn--primary {
@@ -264,6 +282,23 @@ button {
   border-radius: var(--r-lg);
 }
 
+/* A slow, shallow pulse on the one action we want found first. */
+.btn--primary.btn--lg {
+  animation: ctaBreathe 2.6s var(--ease-out) infinite;
+}
+
+@keyframes ctaBreathe {
+  0%, 100% { box-shadow: 0 8px 18px var(--accent-shadow); }
+  50% {
+    /* First line is the fallback: browsers without color-mix() keep a pulse
+       rather than dropping the declaration and showing none at all. */
+    box-shadow: 0 10px 30px var(--accent-shadow), 0 0 0 6px var(--accent-shadow);
+    box-shadow:
+      0 10px 30px var(--accent-shadow),
+      0 0 0 6px color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+}
+
 .btn[disabled] {
   opacity: 0.45;
   pointer-events: none;
@@ -279,11 +314,12 @@ button {
   background: var(--surface-translucent);
   color: var(--ink);
   box-shadow: var(--shadow-sm);
-  transition: transform var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-mid) var(--ease-spring);
 }
 
 .icon-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.88);
+  transition-duration: 60ms;
 }
 
 .icon-btn svg {
@@ -410,9 +446,10 @@ button {
 }
 
 @keyframes toastIn {
-  0% { opacity: 0; transform: translateY(8px) scale(0.94); }
-  10%, 80% { opacity: 1; transform: none; }
-  100% { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  0% { opacity: 0; transform: translateY(14px) scale(0.86); }
+  12% { opacity: 1; transform: translateY(-3px) scale(1.04); }
+  20%, 78% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-14px) scale(0.96); }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -475,27 +512,14 @@ button {
 /* Confetti                                                                */
 /* ---------------------------------------------------------------------- */
 
-#fxHost {
+/* One shared canvas for every particle effect. */
+#fxCanvas {
   position: absolute;
   inset: 0;
   z-index: 65;
-  overflow: hidden;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-}
-
-#fxHost i {
-  position: absolute;
-  top: -20px;
-  width: 9px;
-  height: 15px;
-  border-radius: 2px;
-  animation: confettiFall linear forwards;
-}
-
-@keyframes confettiFall {
-  to {
-    transform: translateY(115vh) rotate(620deg);
-  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -570,6 +594,6 @@ button {
   transition-duration: 0.01ms !important;
 }
 
-[data-motion="reduced"] #fxHost {
+[data-motion="reduced"] #fxCanvas {
   display: none;
 }

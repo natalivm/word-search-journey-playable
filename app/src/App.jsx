@@ -68,7 +68,7 @@ export default function App() {
   // `visited` and `params` come from the router: a screen stays mounted once
   // visited, so returning to it restores scroll position — and, for the play
   // screen, the level in progress.
-  const { route, params, visited, go, replace, back } = useRouter();
+  const { route, params, visited, dir, go, replace, back } = useRouter();
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstall, setShowInstall] = useState(false);
 
@@ -140,7 +140,7 @@ export default function App() {
 
   return (
     <>
-      <div id="screens">
+      <div id="screens" data-dir={dir}>
         {SCREENS.filter((name) => visited.has(name)).map((name) => {
           const Screen = COMPONENTS[name];
           const active = route.name === name;

@@ -14,7 +14,7 @@
  * progress) must not see its params fall back to defaults.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export const SCREENS = ["home", "map", "play", "profile", "settings"];
 
@@ -35,9 +35,24 @@ export function toHash(name, params = {}) {
   return `#/${name}${query ? `?${query}` : ""}`;
 }
 
-function nextState(prev, route) {
+function nextState(prev, route, depth) {
+  // `popstate` and `hashchange` both fire for a browser back, and the second
+  // one would otherwise recompute the direction against already-updated
+  // state and flip it. Returning `prev` also lets React skip the re-render.
+  if (
+    prev.depth === depth &&
+    prev.route.name === route.name &&
+    toHash(prev.route.name, prev.route.params) === toHash(route.name, route.params)
+  ) {
+    return prev;
+  }
+
   return {
     route,
+    depth,
+    // Travelling to a shallower history entry is a "back"; the screen
+    // transition slides the other way for it.
+    dir: depth < prev.depth ? "back" : "forward",
     params: { ...prev.params, [route.name]: route.params },
     visited: prev.visited.has(route.name)
       ? prev.visited
@@ -50,13 +65,37 @@ export function useRouter() {
     const route = parseHash(window.location.hash);
     return {
       route,
+      depth: 0,
+      dir: "forward",
       params: { [route.name]: route.params },
       visited: new Set(["home", route.name])
     };
   });
 
+  // Mirrors nav.depth for the listeners, which are registered once.
+  const depthRef = useRef(0);
+
   useEffect(() => {
-    const onPop = () => setNav((prev) => nextState(prev, parseHash(window.location.hash)));
+    const onPop = () => {
+      const route = parseHash(window.location.hash);
+      let depth = window.history.state?.depth;
+
+      if (depth === undefined || depth === null) {
+        // The hash changed from outside the router (a manual edit, a link).
+        // Adopt it as a forward step and stamp the entry so back() can still
+        // tell how deep we are.
+        depth = depthRef.current + 1;
+        window.history.replaceState(
+          { name: route.name, params: route.params, depth },
+          "",
+          window.location.hash
+        );
+      }
+
+      depthRef.current = depth;
+      setNav((prev) => nextState(prev, route, depth));
+    };
+
     window.addEventListener("popstate", onPop);
     window.addEventListener("hashchange", onPop);
 
@@ -80,13 +119,15 @@ export function useRouter() {
     if (window.location.hash === hash) return;
     const depth = (window.history.state?.depth ?? 0) + 1;
     window.history.pushState({ name, params, depth }, "", hash);
-    setNav((prev) => nextState(prev, { name, params }));
+    depthRef.current = depth;
+    setNav((prev) => nextState(prev, { name, params }, depth));
   }, []);
 
   const replace = useCallback((name, params = {}) => {
     const depth = window.history.state?.depth ?? 0;
     window.history.replaceState({ name, params, depth }, "", toHash(name, params));
-    setNav((prev) => nextState(prev, { name, params }));
+    depthRef.current = depth;
+    setNav((prev) => nextState(prev, { name, params }, depth));
   }, []);
 
   const back = useCallback((fallback = "home") => {
@@ -96,5 +137,13 @@ export function useRouter() {
     else replace(fallback);
   }, [replace]);
 
-  return { route: nav.route, params: nav.params, visited: nav.visited, go, replace, back };
+  return {
+    route: nav.route,
+    params: nav.params,
+    visited: nav.visited,
+    dir: nav.dir,
+    go,
+    replace,
+    back
+  };
 }

@@ -39,10 +39,16 @@ To package it for upload:
 bash scripts/package.sh   # -> dist-ad/word-search-journey-playable.zip
 ```
 
-## Deployment
+## Deployment (GitHub Pages)
 
-`.github/workflows/pages.yml` builds and publishes to GitHub Pages on every
-push to `main`, and runs the same checks on pull requests. The published site:
+`.github/workflows/pages.yml` builds and publishes on every push to `main`,
+and runs the same checks on pull requests. Neither `dist/` nor `dist-ad/` is
+committed — CI builds both.
+
+One-time repository setup: **Settings → Pages → Source → GitHub Actions**.
+(Not "Deploy from a branch" — the site is built, not served from the repo.)
+
+The published site:
 
 ```text
 /                                      landing page
@@ -52,7 +58,25 @@ push to `main`, and runs the same checks on pull requests. The published site:
 /docs/                                 guides
 ```
 
-Neither `dist/` nor `dist-ad/` is committed — CI builds both.
+### Project-path safety
+
+Pages serves this repo from `https://<user>.github.io/<repo>/`, not a domain
+root, so **every asset path has to be relative**. An absolute `/assets/...`
+works perfectly on localhost and 404s in production.
+
+What keeps that working:
+
+- `vite.config.js` sets `base: "./"`, so the bundle emits relative URLs.
+- The manifest's `start_url`, `scope`, `id`, icons and shortcuts are relative.
+- The service worker is registered as `./sw.js`, so its scope is
+  `/<repo>/game/` rather than the whole domain, and it pre-caches relative
+  URLs written from the real build output.
+- Routing is hash-based, so deep links need no server rewrites — Pages has no
+  way to do them.
+- `.nojekyll` stops Jekyll dropping paths that begin with an underscore.
+
+`npm run check:pages` asserts all of the above against the built output and
+fails CI if any of it regresses.
 
 ## Documentation
 

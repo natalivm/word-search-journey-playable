@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "verify": "node scripts/verify-levels.mjs",
     "lint": "eslint app/src scripts vite.config.js app/public/sw.js",
-    "check": "npm run lint && npm run verify && npm run build"
+    "check": "npm run lint && npm run verify && npm run build && npm run check:pages",
+    "check:pages": "node scripts/check-pages.mjs"
   },
   "dependencies": {
     "react": "19.3.0",

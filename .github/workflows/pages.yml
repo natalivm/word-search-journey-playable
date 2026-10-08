@@ -62,24 +62,10 @@ jobs:
           test -f dist/icons/icon-maskable-512.png
           node -e "JSON.parse(require('fs').readFileSync('dist/manifest.webmanifest','utf8'))"
 
-      - name: Check the service worker pre-caches the real build output
-        run: |
-          node -e "
-            const fs = require('fs');
-            const src = fs.readFileSync('dist/sw.js', 'utf8');
-            const block = src.match(/PRECACHE_START \*\/([\s\S]*?)\/\* PRECACHE_END/);
-            if (!block) { console.error('Precache markers missing — did the build postStep run?'); process.exit(1); }
-            const paths = [...block[1].matchAll(/\"\.\/([^\"]+)\"/g)].map(m => 'dist/' + m[1]);
-            if (!paths.length) { console.error('Precache list is empty.'); process.exit(1); }
-            const missing = paths.filter(p => !fs.existsSync(p));
-            if (missing.length) {
-              console.error('Service worker pre-caches files that do not exist:');
-              for (const p of missing) console.error('  ' + p);
-              process.exit(1);
-            }
-            if (/wsj-dev/.test(src)) { console.error('Cache name was not stamped by the build.'); process.exit(1); }
-            console.log('All ' + paths.length + ' pre-cached assets exist.');
-          "
+      # Pages serves this repo from /<repo>/, so an absolute asset path works
+      # locally and 404s in production. This catches that before deploying.
+      - name: Check GitHub Pages path compatibility
+        run: npm run check:pages
 
       - name: Package playable ZIP
         run: bash scripts/package.sh

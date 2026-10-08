@@ -32,6 +32,8 @@ import {
 } from "../lib/store.js";
 import { checkAchievements } from "../lib/achievements.js";
 import { formatTime } from "../lib/format.js";
+import { useCountUp } from "../lib/hooks.js";
+import { sparkle, pop as popParticles, toLocal } from "../lib/particles.js";
 import * as audio from "../lib/audio.js";
 import * as haptics from "../lib/haptics.js";
 
@@ -44,24 +46,44 @@ const IDLE_ASSIST_MS = 18000;
 
 // Memoised on primitives, so a selection change only re-renders the handful
 // of cells whose state actually moved, not all 144.
-const Tile = memo(function Tile({ hinted }) {
-  return <div className={`tile${hinted ? " is-hint" : ""}`} />;
+const Tile = memo(function Tile({ hinted, wave }) {
+  return <div className={`tile${hinted ? " is-hint" : ""}`} style={{ "--wave": wave }} />;
 });
 
-const Cell = memo(function Cell({ letter, row, col, active, found, cursor, popped }) {
+const Cell = memo(function Cell({ letter, row, col, active, found, cursor, popIndex, wave }) {
+  const popping = popIndex !== undefined;
   return (
     <button
-      className={`cell${active ? " is-active" : ""}${found ? " is-found" : ""}${cursor ? " is-cursor" : ""}${popped ? " is-pop" : ""}`}
+      className={`cell${active ? " is-active" : ""}${found ? " is-found" : ""}${cursor ? " is-cursor" : ""}${popping ? " is-pop" : ""}`}
       type="button"
       tabIndex={row === 0 && col === 0 ? 0 : -1}
       aria-label={`${letter}, row ${row + 1}, column ${col + 1}`}
       data-row={row}
       data-col={col}
+      // --pop orders the flip along the word; --wave orders the board reveal.
+      style={{ "--pop": popping ? popIndex : undefined, "--wave": wave }}
     >
       {letter}
     </button>
   );
 });
+
+/** Resolve one of the nine word-highlight colours to a real value. */
+function wordColor(index) {
+  const name = `--w${(index % 9) + 1}`;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#ff6b6b";
+}
+
+/** A reward figure that counts up once the stars have landed. */
+function Reward({ label, value, delay }) {
+  const shown = useCountUp(value, { delay });
+  return (
+    <div className="reward">
+      <b className={shown === value && value > 0 ? "is-settled" : undefined}>{`+${shown}`}</b>
+      <small>{label}</small>
+    </div>
+  );
+}
 
 /* ---------------------------------------------------------------------- */
 /* One attempt at one level                                                */
@@ -84,10 +106,15 @@ function Level({ level, active, go, onRestart }) {
   const [shownStars, setShownStars] = useState(0);
   const [geo, setGeo] = useState(null);
   const [elapsed, setElapsed] = useState(0);
+  // The reveal animation is scoped to this flag so that later class changes
+  // (a letter flipping) can never retrigger a board-wide entry.
+  const [entering, setEntering] = useState(true);
 
   const frameRef = useRef(null);
   const boardRef = useRef(null);
   const lettersRef = useRef(null);
+  // Mirror of `geo` for callbacks that should not be rebuilt on every resize.
+  const geoRef = useRef(null);
 
   const anchorRef = useRef(null);
   const draggingRef = useRef(false);
@@ -98,6 +125,7 @@ function Level({ level, active, go, onRestart }) {
   const lastEventRef = useRef(0);
   const assistRef = useRef(0);
   const shakeRef = useRef(null);
+  const starsRef = useRef(null);
 
   const total = puzzle.words.length;
   const isOver = result !== null;
@@ -123,7 +151,9 @@ function Level({ level, active, go, onRestart }) {
       y: cell.offsetTop + cell.offsetHeight / 2
     }));
 
-    setGeo({ w, h, cellW: first.offsetWidth, cellH: first.offsetHeight, pts });
+    const next = { w, h, cellW: first.offsetWidth, cellH: first.offsetHeight, pts };
+    geoRef.current = next;
+    setGeo(next);
     boardRef.current?.style.setProperty(
       "--cell-font",
       `${Math.round(Math.min(first.offsetWidth, first.offsetHeight) * 0.52)}px`
@@ -131,6 +161,13 @@ function Level({ level, active, go, onRestart }) {
   }, []);
 
   useLayoutEffect(measure, [measure, size]);
+
+  // Longest stagger is the far corner: 2*(size-1) steps at 16ms, plus the
+  // animation itself.
+  useEffect(() => {
+    const id = setTimeout(() => setEntering(false), 2 * (size - 1) * 16 + 500);
+    return () => clearTimeout(id);
+  }, [size]);
 
   useEffect(() => {
     const observer = new ResizeObserver(measure);
@@ -287,7 +324,23 @@ function Level({ level, active, go, onRestart }) {
 
     setHintCells([]);
     setPoppedCells(cells);
-    setTimeout(() => setPoppedCells([]), 440);
+    // Cover the full stagger: the last letter starts at (n-1)*55ms.
+    setTimeout(() => setPoppedCells([]), 680 + cells.length * 55);
+
+    // A spark at each letter, travelling along the word with the flip.
+    const rect = lettersRef.current?.getBoundingClientRect();
+    const points = geoRef.current?.pts;
+    if (rect && points) {
+      const color = wordColor(colorIndex);
+      cells.forEach((cell, i) => {
+        const pt = points[cell.row * size + cell.col];
+        if (!pt) return;
+        setTimeout(() => {
+          const local = toLocal(rect.left + pt.x, rect.top + pt.y);
+          sparkle(local.x, local.y, color);
+        }, i * 55);
+      });
+    }
 
     audio.sfxFound(found.length);
     haptics.success();
@@ -295,7 +348,7 @@ function Level({ level, active, go, onRestart }) {
     lastEventRef.current = performance.now();
 
     announce(`${entry.word} found. ${puzzle.words.length - found.length - 1} to go.`);
-  }, [puzzle.words, found.length, finishLevel]);
+  }, [puzzle.words, found.length, finishLevel, size]);
 
   const commitSelection = useCallback((path) => {
     const text = path.map((p) => letterAt(p.row, p.col)).join("");
@@ -470,7 +523,17 @@ function Level({ level, active, go, onRestart }) {
     const timers = [0, 1, 2].map((i) =>
       setTimeout(() => {
         setShownStars(i + 1);
-        if (i < result.stars) audio.sfxStar(i * 4);
+        if (i >= result.stars) return;
+
+        audio.sfxStar(i * 4);
+
+        // Burst from the star that just landed.
+        const node = starsRef.current?.children[i];
+        if (node) {
+          const r = node.getBoundingClientRect();
+          const local = toLocal(r.left + r.width / 2, r.top + r.height / 2);
+          popParticles(local.x, local.y);
+        }
       }, 380 + i * 260)
     );
 
@@ -513,10 +576,12 @@ function Level({ level, active, go, onRestart }) {
     [hintCells, size]
   );
 
-  const poppedSet = useMemo(
-    () => new Set(poppedCells.map((c) => c.row * size + c.col)),
-    [poppedCells, size]
-  );
+  // Cell index -> position in the word, so each letter flips in sequence.
+  const poppedOrder = useMemo(() => {
+    const map = new Map();
+    poppedCells.forEach((c, i) => map.set(c.row * size + c.col, i));
+    return map;
+  }, [poppedCells, size]);
 
   const gap = size <= 8 ? 5 : size <= 10 ? 4 : 3;
   const layerStyle = { "--n": size, "--gap": `${gap}px` };
@@ -534,6 +599,7 @@ function Level({ level, active, go, onRestart }) {
         x1={a.x} y1={a.y} x2={b.x} y2={b.y}
         strokeWidth={stroke}
         stroke={color}
+        pathLength="1"
       />
     );
   };
@@ -582,9 +648,11 @@ function Level({ level, active, go, onRestart }) {
         </div>
 
         <div className="board-frame" ref={frameRef}>
-          <div className="board" ref={boardRef}>
+          <div className={`board${entering ? " is-entering" : ""}`} ref={boardRef}>
             <div className="layer layer--tiles" style={layerStyle} aria-hidden="true">
-              {puzzle.grid.map((_, i) => <Tile key={i} hinted={hintSet.has(i)} />)}
+              {puzzle.grid.map((_, i) => (
+                <Tile key={i} hinted={hintSet.has(i)} wave={Math.floor(i / size) + (i % size)} />
+              ))}
             </div>
 
             <svg
@@ -619,7 +687,8 @@ function Level({ level, active, go, onRestart }) {
                   active={selectedCells.has(i)}
                   found={foundCells.has(i)}
                   cursor={keyboardMode && cursor.row * size + cursor.col === i}
-                  popped={poppedSet.has(i)}
+                  popIndex={poppedOrder.get(i)}
+                  wave={Math.floor(i / size) + (i % size)}
                 />
               ))}
             </div>
@@ -675,7 +744,7 @@ function Level({ level, active, go, onRestart }) {
           <h3>{result?.stars === 3 ? "Perfect!" : "Level complete!"}</h3>
           <p className="sub">{result?.note}</p>
 
-          <div className="star-burst">
+          <div className="star-burst" ref={starsRef}>
             {[0, 1, 2].map((i) => (
               <svg
                 key={i}
@@ -689,8 +758,8 @@ function Level({ level, active, go, onRestart }) {
           </div>
 
           <div className="rewards">
-            <div className="reward"><b>{`+${result?.reward.coins ?? 0}`}</b><small>Coins</small></div>
-            <div className="reward"><b>{`+${result?.reward.xp ?? 0}`}</b><small>XP</small></div>
+            <Reward label="Coins" value={result?.reward.coins ?? 0} delay={900} />
+            <Reward label="XP" value={result?.reward.xp ?? 0} delay={1050} />
             <div className="reward"><b>{formatTime(result?.ms ?? 0)}</b><small>Time</small></div>
           </div>
 

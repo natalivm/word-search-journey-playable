@@ -6,12 +6,11 @@
  * screen fires toasts from inside pointer handlers and timers.
  */
 
-import { state as save } from "./store.js";
+import { celebrate } from "./particles.js";
 
 let snapshot = {
   toasts: [],
   sheet: null,
-  confetti: null,
   live: { text: "", seq: 0 }
 };
 
@@ -62,29 +61,12 @@ export function closeSheet() {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Confetti                                                                */
+/* Celebration                                                             */
 /* ---------------------------------------------------------------------- */
 
-const COLORS = ["#ff6b6b", "#ffd166", "#18a999", "#2364aa", "#7c5cde", "#ffffff"];
-
-export function confetti(count = 40) {
-  if (save.settings.reduceMotion) return;
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-
-  const id = nextId++;
-  const pieces = Array.from({ length: count }, (_, i) => ({
-    key: i,
-    left: `${Math.random() * 100}%`,
-    background: COLORS[i % COLORS.length],
-    animationDelay: `${Math.random() * 320}ms`,
-    animationDuration: `${1000 + Math.random() * 900}ms`,
-    transform: `rotate(${Math.random() * 360}deg)`
-  }));
-
-  emit({ confetti: { id, pieces } });
-  setTimeout(() => {
-    if (snapshot.confetti?.id === id) emit({ confetti: null });
-  }, 2600);
+/** Kept here so call sites don't need to know which engine draws it. */
+export function confetti(count = 90) {
+  celebrate(count);
 }
 
 /* ---------------------------------------------------------------------- */
