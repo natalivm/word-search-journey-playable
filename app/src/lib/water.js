@@ -102,11 +102,18 @@ void main() {
      surface is quantised to 12 a second. It is the single strongest cue that
      this was painted rather than simulated.
 
-     The scale afterwards is the swell's speed, and it is deliberately not
-     folded into the divisor: quantising first keeps the 12-a-second cadence
-     whatever the speed, where dividing by 6 instead would slow the cadence
-     too and just read as a lower frame rate. */
-  float t = floor(uTime * 12.0) / 12.0 * 0.5;
+     The scales afterwards are speeds, and they are deliberately not folded
+     into the divisor: quantising first keeps the 12-a-second cadence whatever
+     the speed, where dividing by 6 instead would slow the cadence too and
+     just read as a lower frame rate.
+
+     Two speeds, because slow water and dead water are not the same thing.
+     The swell crawls — the big shapes should barely travel under a map you
+     are reading — while the glints keep their own livelier beat, which is
+     what stops the surface looking frozen at this pace. */
+  float held = floor(uTime * 12.0) / 12.0;
+  float t = held * 0.26;
+  float tSpark = held * 0.75;
 
   float h = swell(p, t);
   float depth = clamp(gl_FragCoord.y / uRes.y, 0.0, 1.0);
@@ -142,7 +149,7 @@ void main() {
   col = mix(col, mix(col, uGlow, 0.55), under * 0.6 * uStrength);
 
   /* Glints ride the brighter water, where the light would be catching it. */
-  float sparkle = glints(p * 1.45 + vec2(0.0, t * 0.05), t) * smoothstep(0.25, 0.75, tone);
+  float sparkle = glints(p * 1.45 + vec2(0.0, t * 0.05), tSpark) * smoothstep(0.25, 0.75, tone);
   col = mix(col, uGlow, clamp(sparkle, 0.0, 1.0) * 0.85 * uStrength);
 
   /* A trace of tooth, so the flat areas read as paint on paper rather than
