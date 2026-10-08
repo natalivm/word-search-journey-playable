@@ -100,8 +100,13 @@ void main() {
   /* Held frames. Painted animation runs on twos and threes rather than on
      every frame, and water drawn by hand moves in steps — so the whole
      surface is quantised to 12 a second. It is the single strongest cue that
-     this was painted rather than simulated. */
-  float t = floor(uTime * 12.0) / 12.0;
+     this was painted rather than simulated.
+
+     The scale afterwards is the swell's speed, and it is deliberately not
+     folded into the divisor: quantising first keeps the 12-a-second cadence
+     whatever the speed, where dividing by 6 instead would slow the cadence
+     too and just read as a lower frame rate. */
+  float t = floor(uTime * 12.0) / 12.0 * 0.5;
 
   float h = swell(p, t);
   float depth = clamp(gl_FragCoord.y / uRes.y, 0.0, 1.0);
