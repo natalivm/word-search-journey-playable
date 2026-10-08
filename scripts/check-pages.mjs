@@ -32,6 +32,9 @@ function walk(dir) {
 const files = walk(dist);
 const rel = (f) => relative(root, f);
 
+/** The one rule this whole script exists to enforce. */
+const isAbsolute = (value) => value.startsWith("/") || /^https?:/i.test(value);
+
 /* -- 1. The entry HTML must not reference anything from the domain root -- */
 const html = readFileSync(join(dist, "index.html"), "utf8");
 for (const match of html.matchAll(/\b(?:src|href)="(\/[^/"][^"]*)"/g)) {
@@ -54,7 +57,7 @@ if (!existsSync(manifestPath)) {
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   const relativeField = (value, name) => {
     if (typeof value !== "string") return;
-    if (value.startsWith("/") || /^https?:/i.test(value)) {
+    if (isAbsolute(value)) {
       problems.push(`manifest ${name} is "${value}" — must be relative`);
     }
   };
@@ -87,7 +90,7 @@ if (!existsSync(swPath)) {
     if (!entries.length) problems.push("the service worker precache list is empty");
 
     for (const entry of entries) {
-      if (entry.startsWith("/") || /^https?:/i.test(entry)) {
+      if (isAbsolute(entry)) {
         problems.push(`service worker pre-caches ${entry} — must be relative`);
       }
       const target = join(dist, entry.replace(/^\.\//, ""));
@@ -100,9 +103,26 @@ if (!existsSync(swPath)) {
   if (/wsj-dev/.test(sw)) {
     problems.push("the service worker cache name was not stamped by the build");
   }
-  // An absolute registration scope would try to control the whole domain.
-  if (/register\(\s*["']\//.test(sw)) {
-    problems.push("the service worker is registered from an absolute path");
+}
+
+/* -- 4b. The registration itself must be relative ----------------------- */
+// This lives in the bundled app code, not in sw.js, so it has to be checked
+// there — grepping sw.js for it can never match and the guard would pass
+// while `register("/sw.js")` silently claimed the whole github.io domain.
+const bundles = files.filter((f) => f.endsWith(".js") && f !== swPath);
+const registrations = bundles.flatMap((file) => {
+  const src = readFileSync(file, "utf8");
+  return [...src.matchAll(/serviceWorker\s*\.\s*register\s*\(\s*(["'`])([^"'`]*)\1/g)]
+    .map((m) => ({ file, arg: m[2] }));
+});
+
+if (!registrations.length) {
+  problems.push("no serviceWorker.register() call found in the build — offline play would not work");
+}
+
+for (const { file, arg } of registrations) {
+  if (isAbsolute(arg)) {
+    problems.push(`${rel(file)} registers the service worker as "${arg}" — must be relative`);
   }
 }
 

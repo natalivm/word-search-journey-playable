@@ -1,6 +1,6 @@
 /** Player profile: identity, stats, achievements. */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import TopBar from "../components/TopBar.jsx";
 import ProgressBar from "../components/ProgressBar.jsx";
 import { toast } from "../lib/overlays.js";
@@ -8,9 +8,10 @@ import {
   state, AVATARS, useStoreVersion, playerLevel, rankTitle,
   starsEarned, starsPossible, commit
 } from "../lib/store.js";
-import { ACHIEVEMENTS, unlockedCount } from "../lib/achievements.js";
+import { ACHIEVEMENTS, unlockedCount, isUnlocked } from "../lib/achievements.js";
 import { TOTAL_LEVELS } from "../lib/levels.js";
 import { formatTime, formatNumber } from "../lib/format.js";
+import { useOnDeactivate } from "../lib/hooks.js";
 import * as audio from "../lib/audio.js";
 import * as haptics from "../lib/haptics.js";
 
@@ -26,7 +27,7 @@ function Stat({ label, value }) {
 }
 
 function Badge({ achievement }) {
-  const unlocked = Boolean(state.achievements[achievement.id]);
+  const unlocked = isUnlocked(achievement.id);
   const [have, need] = achievement.progress();
   const shown = Math.min(have, need);
 
@@ -46,7 +47,7 @@ function Badge({ achievement }) {
   );
 }
 
-export default function ProfileScreen({ back }) {
+export default function ProfileScreen({ active, back }) {
   useStoreVersion();
   const [draftName, setDraftName] = useState(state.profile.name);
 
@@ -62,8 +63,9 @@ export default function ProfileScreen({ back }) {
     toast("Name saved", "good");
   };
 
-  // Commit a half-typed name if the player navigates away from the screen.
-  useEffect(() => saveName, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Commit a half-typed name when the player leaves. Unmount cleanup would
+  // never run here — this screen stays mounted once visited.
+  useOnDeactivate(active, saveName);
 
   return (
     <>

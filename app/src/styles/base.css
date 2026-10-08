@@ -282,21 +282,41 @@ button {
   border-radius: var(--r-lg);
 }
 
-/* A slow, shallow pulse on the one action we want found first. */
+/* A slow, shallow pulse on the one action we want found first.
+   The halo is a pseudo-element animating opacity and scale rather than the
+   button's box-shadow: this button is on screen for the whole session, and
+   box-shadow animates on the paint path — it would repaint every frame,
+   forever. opacity and transform stay on the compositor. */
 .btn--primary.btn--lg {
+  position: relative;
+  isolation: isolate;
+}
+
+.btn--primary.btn--lg::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--accent);
+  opacity: 0;
+}
+
+/* Only animate where it can actually be seen. Inactive screens and closed
+   overlays are `visibility: hidden`, not `display: none`, so without this the
+   home CTA and both overlay buttons keep a compositor animation ticking for
+   the entire session. */
+.screen.is-active .btn--primary.btn--lg::before {
   animation: ctaBreathe 2.6s var(--ease-out) infinite;
 }
 
+.overlay:not(.is-open) .btn--primary.btn--lg::before {
+  animation: none;
+}
+
 @keyframes ctaBreathe {
-  0%, 100% { box-shadow: 0 8px 18px var(--accent-shadow); }
-  50% {
-    /* First line is the fallback: browsers without color-mix() keep a pulse
-       rather than dropping the declaration and showing none at all. */
-    box-shadow: 0 10px 30px var(--accent-shadow), 0 0 0 6px var(--accent-shadow);
-    box-shadow:
-      0 10px 30px var(--accent-shadow),
-      0 0 0 6px color-mix(in srgb, var(--accent) 16%, transparent);
-  }
+  0%, 100% { opacity: 0; transform: scale(0.97); }
+  50% { opacity: 0.3; transform: scale(1); }
 }
 
 .btn[disabled] {

@@ -33,13 +33,3 @@ export const fail = () => buzz([26, 50, 26]);
 
 /** Level complete. */
 export const celebrate = () => buzz([24, 50, 24, 50, 60]);
-
-export const stop = () => {
-  if (typeof navigator.vibrate === "function") {
-    try {
-      navigator.vibrate(0);
-    } catch {
-      /* ignore */
-    }
-  }
-};

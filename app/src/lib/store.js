@@ -7,7 +7,7 @@
  */
 
 import { useSyncExternalStore } from "react";
-import { TOTAL_LEVELS, todayKey } from "./levels.js";
+import { TOTAL_LEVELS, LEVELS_PER_CHAPTER, todayKey } from "./levels.js";
 
 const KEY = "wsj.save";
 const VERSION = 1;
@@ -183,18 +183,13 @@ export const starsEarned = () =>
 export const starsPossible = () => TOTAL_LEVELS * 3;
 
 /** Stars earned in one chapter, and how many are on offer. */
-export function chapterProgress(chapterIndex, levelsPerChapter = 8) {
-  const first = chapterIndex * levelsPerChapter + 1;
+export function chapterProgress(chapterIndex) {
+  const first = chapterIndex * LEVELS_PER_CHAPTER + 1;
   let stars = 0;
-  let done = 0;
-  for (let i = 0; i < levelsPerChapter; i += 1) {
-    const p = state.progress[first + i];
-    if (p?.stars) {
-      stars += p.stars;
-      done += 1;
-    }
+  for (let i = 0; i < LEVELS_PER_CHAPTER; i += 1) {
+    stars += state.progress[first + i]?.stars || 0;
   }
-  return { stars, done, total: levelsPerChapter, maxStars: levelsPerChapter * 3 };
+  return { stars, maxStars: LEVELS_PER_CHAPTER * 3 };
 }
 
 export const dailyDone = () => state.daily.lastDate === todayKey();
@@ -220,7 +215,8 @@ export function addXp(n) {
   const before = playerLevel().level;
   state.profile.xp += n;
   commit();
-  return { leveledUp: playerLevel().level > before, level: playerLevel().level };
+  const after = playerLevel();
+  return { leveledUp: after.level > before, level: after.level };
 }
 
 export function setSetting(key, value) {
@@ -232,17 +228,21 @@ export function setSetting(key, value) {
 export function recordLevel(n, { stars, ms, hints, flawless }) {
   const prev = state.progress[n];
   const isFirst = !prev?.stars;
+  const wasFlawless = Boolean(prev?.flawless);
 
   state.progress[n] = {
     stars: Math.max(stars, prev?.stars || 0),
     bestMs: prev?.bestMs ? Math.min(prev.bestMs, ms) : ms,
     hints: (prev?.hints || 0) + hints,
-    plays: (prev?.plays || 0) + 1
+    plays: (prev?.plays || 0) + 1,
+    flawless: wasFlawless || flawless
   };
 
   if (isFirst) state.stats.levelsCompleted += 1;
   if (stars === 3 && (prev?.stars || 0) < 3) state.stats.perfectLevels += 1;
-  if (flawless) state.stats.flawlessLevels += 1;
+  // Counts distinct levels, not plays — otherwise replaying one easy level
+  // five times unlocks a badge that asks for five levels.
+  if (flawless && !wasFlawless) state.stats.flawlessLevels += 1;
 
   state.stats.totalMs += ms;
   if (!state.stats.bestMs || ms < state.stats.bestMs) state.stats.bestMs = ms;
@@ -287,33 +287,13 @@ export function resetProgress() {
   const keepSettings = { ...state.settings };
   const fresh = defaults();
   Object.assign(state, fresh, { settings: keepSettings });
-  version += 1;
+  commit();
   commitNow();
-  listeners.forEach((fn) => fn(state));
 }
 
 /* ---------------------------------------------------------------------- */
 /* React binding                                                           */
 /* ---------------------------------------------------------------------- */
-
-/**
- * The save file is an external, mutable store rather than React state: the
- * play screen writes to it on every found word, and several screens read it
- * at once. `useSyncExternalStore` is React's supported way to subscribe to
- * exactly that, and it keeps the store usable outside React (the audio and
- * haptics modules read settings directly).
- *
- * `selector` must return a primitive or a stable reference — it is compared
- * by identity on every notification, so returning a fresh object each call
- * would re-render forever.
- */
-export function useStore(selector) {
-  return useSyncExternalStore(
-    subscribe,
-    () => selector(state),
-    () => selector(state)
-  );
-}
 
 /** Bumped on every commit, for components that just need "something changed". */
 export function useStoreVersion() {

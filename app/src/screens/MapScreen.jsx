@@ -12,13 +12,12 @@ import Stars from "../components/Stars.jsx";
 import ProgressBar from "../components/ProgressBar.jsx";
 import { toast } from "../lib/overlays.js";
 import { CHAPTERS } from "../lib/words.js";
-import { levelsInChapter, LEVELS_PER_CHAPTER } from "../lib/levels.js";
-import { state, useStoreVersion, isUnlocked, chapterProgress, starsEarned } from "../lib/store.js";
+import { levelsInChapter } from "../lib/levels.js";
+import { state, useStoreVersion, unlockedThrough, chapterProgress, starsEarned } from "../lib/store.js";
 import * as audio from "../lib/audio.js";
 import * as haptics from "../lib/haptics.js";
 
-function LevelNode({ level, onPlay }) {
-  const unlocked = isUnlocked(level.n);
+function LevelNode({ level, unlocked, onPlay }) {
   const stars = state.progress[level.n]?.stars || 0;
   const isNext = unlocked && !stars;
 
@@ -45,10 +44,10 @@ function LevelNode({ level, onPlay }) {
   );
 }
 
-function Chapter({ chapter, index, onPlay, trailRef }) {
-  const progress = chapterProgress(index, LEVELS_PER_CHAPTER);
+function Chapter({ chapter, index, through, onPlay, trailRef }) {
+  const progress = chapterProgress(index);
   const levels = levelsInChapter(index);
-  const unlocked = isUnlocked(levels[0].n);
+  const unlocked = levels[0].n <= through;
 
   return (
     <section className="chapter" data-chapter={chapter.id}>
@@ -70,7 +69,7 @@ function Chapter({ chapter, index, onPlay, trailRef }) {
           <polyline />
         </svg>
         {levels.map((level) => (
-          <LevelNode key={level.n} level={level} onPlay={onPlay} />
+          <LevelNode key={level.n} level={level} unlocked={level.n <= through} onPlay={onPlay} />
         ))}
       </div>
     </section>
@@ -78,9 +77,12 @@ function Chapter({ chapter, index, onPlay, trailRef }) {
 }
 
 export default function MapScreen({ go, back }) {
-  const version = useStoreVersion();
+  useStoreVersion();
   const listRef = useRef(null);
   const pathRefs = useRef([]);
+  // Scanned once per render, not once per node — it walks the whole
+  // progress object, and there are 80 nodes.
+  const through = unlockedThrough();
 
   const onPlay = useCallback((level, unlocked) => {
     if (!unlocked) {
@@ -120,7 +122,11 @@ export default function MapScreen({ go, back }) {
     }
   }, []);
 
-  useLayoutEffect(drawTrails, [drawTrails, version]);
+  // Deliberately not keyed on the store version: every found word bumps it,
+  // and re-measuring 10 chapters x 9 rects on a hidden screen costs ~88
+  // forced layout reads per word. Trails only move when the layout does,
+  // which the ResizeObserver below already covers.
+  useLayoutEffect(drawTrails, [drawTrails]);
 
   useEffect(() => {
     const observer = new ResizeObserver(drawTrails);
@@ -131,10 +137,22 @@ export default function MapScreen({ go, back }) {
   // Land on the level the player is about to attempt, not at the top of a
   // list they have already finished.
   useEffect(() => {
-    const target = listRef.current?.querySelector(".node.is-next");
-    if (!target || !listRef.current) return;
-    const top = target.offsetTop - listRef.current.clientHeight / 2;
-    listRef.current.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+    const container = listRef.current;
+    const target = container?.querySelector(".node.is-next");
+    if (!container || !target) return;
+
+    // Rects, not offsetTop: a node's offsetParent is its .chapter-path (which
+    // is positioned), so offsetTop is measured from the chapter, not from the
+    // scroll container — it would clamp to 0 and always open at chapter one.
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const top =
+      container.scrollTop +
+      (targetRect.top - containerRect.top) -
+      container.clientHeight / 2 +
+      targetRect.height / 2;
+
+    container.scrollTo({ top: Math.max(0, top), behavior: "auto" });
   }, []);
 
   return (
@@ -152,6 +170,7 @@ export default function MapScreen({ go, back }) {
             key={chapter.id}
             chapter={chapter}
             index={i}
+            through={through}
             onPlay={onPlay}
             trailRef={(node) => { pathRefs.current[i] = node; }}
           />

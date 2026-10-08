@@ -13,6 +13,7 @@ import { checkAchievements } from "./lib/achievements.js";
 import { toast } from "./lib/overlays.js";
 import Overlays from "./components/Overlays.jsx";
 import * as audio from "./lib/audio.js";
+import { clearParticles } from "./lib/particles.js";
 
 import HomeScreen from "./screens/HomeScreen.jsx";
 import MapScreen from "./screens/MapScreen.jsx";
@@ -110,6 +111,13 @@ export default function App() {
       window.removeEventListener("pagehide", commitNow);
     };
   }, []);
+
+  // Particles belong to the screen that raised them. Screens stay mounted
+  // once visited, so a per-screen unmount cleanup would never fire — the
+  // change of route is the real signal, and it covers every screen at once.
+  useEffect(() => {
+    clearParticles();
+  }, [route.name]);
 
   /* -- install prompt --------------------------------------------------- */
 

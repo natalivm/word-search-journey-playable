@@ -32,12 +32,14 @@ import {
 } from "../lib/store.js";
 import { checkAchievements } from "../lib/achievements.js";
 import { formatTime } from "../lib/format.js";
-import { useCountUp } from "../lib/hooks.js";
-import { sparkle, pop as popParticles, toLocal } from "../lib/particles.js";
+import { useCountUp, useOnDeactivate } from "../lib/hooks.js";
+import { sparkle, pop as popParticles, toLocal, clearParticles } from "../lib/particles.js";
 import * as audio from "../lib/audio.js";
 import * as haptics from "../lib/haptics.js";
 
 const HINT_COST = 25;
+/** Shared so setting "no cells" twice in a row bails out of a re-render. */
+const NO_CELLS = [];
 const IDLE_ASSIST_MS = 18000;
 
 /* ---------------------------------------------------------------------- */
@@ -68,10 +70,67 @@ const Cell = memo(function Cell({ letter, row, col, active, found, cursor, popIn
   );
 });
 
-/** Resolve one of the nine word-highlight colours to a real value. */
+/** The custom property holding the highlight colour for word `index`. */
+const wordVar = (index) => `--w${(index % 9) + 1}`;
+
+// Resolving a custom property forces a style recalculation, so the palette is
+// read once and reused. Theme, dark mode and the colour-blind palette all
+// change it, so the cache is keyed on the attributes that select it.
+let paletteKey = "";
+const paletteCache = new Map();
+
 function wordColor(index) {
-  const name = `--w${(index % 9) + 1}`;
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#ff6b6b";
+  const root = document.documentElement;
+  const key = `${root.dataset.theme}/${root.dataset.cvd}`;
+  if (key !== paletteKey) {
+    paletteKey = key;
+    paletteCache.clear();
+  }
+
+  const name = wordVar(index);
+  if (!paletteCache.has(name)) {
+    paletteCache.set(name, getComputedStyle(root).getPropertyValue(name).trim() || "#ff6b6b");
+  }
+  return paletteCache.get(name);
+}
+
+/**
+ * The clock, isolated.
+ *
+ * It ticks five times a second; if that state lived in <Level> it would
+ * re-render all 288 board nodes each time to update three characters. The
+ * interval also stops entirely when the player has hidden the timer.
+ */
+function Timer({ running, parSeconds, accumulatedRef, resumedAtRef, runningRef }) {
+  const show = state.settings.showTimer;
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!running || !show) return undefined;
+    const id = setInterval(() => {
+      setElapsed(accumulatedRef.current + (performance.now() - resumedAtRef.current));
+    }, 200);
+    return () => clearInterval(id);
+  }, [running, show, accumulatedRef, resumedAtRef]);
+
+  // Settle on the banked total once the clock stops, so a paused or finished
+  // level still shows the right time.
+  useEffect(() => {
+    if (running) return;
+    setElapsed(accumulatedRef.current + (runningRef.current ? performance.now() - resumedAtRef.current : 0));
+  }, [running, accumulatedRef, resumedAtRef, runningRef]);
+
+  if (!show) return null;
+
+  return (
+    <div
+      className={`timer${elapsed / 1000 > parSeconds ? " is-over" : ""}`}
+      role="timer"
+      aria-label="Elapsed time"
+    >
+      {formatTime(elapsed)}
+    </div>
+  );
 }
 
 /** A reward figure that counts up once the stars have landed. */
@@ -94,9 +153,12 @@ function Level({ level, active, go, onRestart }) {
   const size = puzzle.size;
 
   const [found, setFound] = useState([]);
-  const [selection, setSelection] = useState([]);
-  const [hintCells, setHintCells] = useState([]);
-  const [poppedCells, setPoppedCells] = useState([]);
+  const [selection, setSelection] = useState(NO_CELLS);
+  // One value, not two kept in step: a hint is either absent or it is a set
+  // of cells with a reason. Splitting it meant every call site had to clear
+  // both, and the purchased-hint path forgot — leaving the bulb nudging.
+  const [hint, setHint] = useState(null);
+  const [poppedCells, setPoppedCells] = useState(NO_CELLS);
   const [cursor, setCursor] = useState({ row: 0, col: 0 });
   // The cursor ring is a keyboard affordance; showing it to someone who is
   // dragging with a finger just looks like a stray selected tile.
@@ -105,7 +167,6 @@ function Level({ level, active, go, onRestart }) {
   const [result, setResult] = useState(null);
   const [shownStars, setShownStars] = useState(0);
   const [geo, setGeo] = useState(null);
-  const [elapsed, setElapsed] = useState(0);
   // The reveal animation is scoped to this flag so that later class changes
   // (a letter flipping) can never retrigger a board-wide entry.
   const [entering, setEntering] = useState(true);
@@ -118,8 +179,18 @@ function Level({ level, active, go, onRestart }) {
 
   const anchorRef = useRef(null);
   const draggingRef = useRef(false);
+  // Mirrors of state that handlers need to read synchronously. Reading them
+  // through a setState updater instead would mean doing work inside the
+  // updater, which React may invoke more than once.
+  const selectionRef = useRef(NO_CELLS);
+  const cursorRef = useRef({ row: 0, col: 0 });
   const accumulatedRef = useRef(0);
   const resumedAtRef = useRef(0);
+  // Whether the clock is currently running. Without it, reading the elapsed
+  // total after the timer effect has already banked its span double-counts
+  // that span — which happens whenever the player pauses or backgrounds the
+  // tab inside the short delay between the last word and the win card.
+  const runningRef = useRef(false);
   const hintsRef = useRef(0);
   const wrongRef = useRef(0);
   const lastEventRef = useRef(0);
@@ -132,6 +203,9 @@ function Level({ level, active, go, onRestart }) {
   // Leaving the screen pauses the level by definition, so this is derived
   // rather than stored — no effect has to keep a flag in step with `active`.
   const paused = userPaused || !active;
+
+  // "Already found?" asked once per render instead of a linear scan per word.
+  const foundWords = useMemo(() => new Set(found.map((f) => f.word)), [found]);
 
   /* -- geometry -------------------------------------------------------- */
 
@@ -179,31 +253,72 @@ function Level({ level, active, go, onRestart }) {
 
   // The clock runs only while this effect is alive. Its cleanup banks the
   // time, so pausing, finishing, leaving the screen and unmounting all settle
-  // the elapsed total through one path.
+  // the elapsed total through one path. The visible ticking lives in <Timer>
+  // so it cannot re-render the board.
   useEffect(() => {
     if (paused || isOver) return undefined;
 
     resumedAtRef.current = performance.now();
+    runningRef.current = true;
     if (!lastEventRef.current) lastEventRef.current = performance.now();
 
-    const id = setInterval(() => {
-      setElapsed(accumulatedRef.current + (performance.now() - resumedAtRef.current));
-    }, 200);
-
     return () => {
-      clearInterval(id);
       accumulatedRef.current += performance.now() - resumedAtRef.current;
+      runningRef.current = false;
     };
   }, [paused, isOver]);
+
+  /** Elapsed play time, whether or not the clock is currently running. */
+  const elapsedMs = useCallback(
+    () => accumulatedRef.current + (runningRef.current ? performance.now() - resumedAtRef.current : 0),
+    []
+  );
+
+  /**
+   * Show `path` as the live selection.
+   *
+   * State updaters must be pure — React invokes them more than once under
+   * StrictMode — so the comparison and the feedback both happen here, and
+   * the updater receives a finished value.
+   */
+  const applySelection = useCallback((path) => {
+    const prev = selectionRef.current;
+    const last = path[path.length - 1];
+    const prevLast = prev[prev.length - 1];
+    const lengthChanged = prev.length !== path.length;
+    const endMoved = Boolean(
+      last && prevLast && (last.row !== prevLast.row || last.col !== prevLast.col)
+    );
+    if (!lengthChanged && !endMoved) return;
+
+    if (lengthChanged && path.length) audio.sfxTick(path.length - 1);
+    if (path.length > prev.length) haptics.tapLight();
+
+    selectionRef.current = path;
+    setSelection(path);
+  }, []);
+
+  /** Clear the selection and hand back what it was. */
+  const takeSelection = useCallback(() => {
+    const path = selectionRef.current;
+    selectionRef.current = NO_CELLS;
+    setSelection(NO_CELLS);
+    return path;
+  }, []);
+
+  const moveCursor = useCallback((next) => {
+    cursorRef.current = next;
+    setCursor(next);
+  }, []);
 
   const pause = useCallback(() => {
     if (isOver) return;
     draggingRef.current = false;
     anchorRef.current = null;
-    setSelection([]);
+    takeSelection();
     setUserPaused(true);
     audio.sfxTap();
-  }, [isOver]);
+  }, [isOver, takeSelection]);
 
   const resume = useCallback(() => setUserPaused(false), []);
 
@@ -217,20 +332,21 @@ function Level({ level, active, go, onRestart }) {
   /* -- idle assist ----------------------------------------------------- */
 
   const nextUnfound = useCallback(
-    () => puzzle.words.find((w) => !found.some((f) => f.word === w.word)),
-    [puzzle.words, found]
+    () => puzzle.words.find((w) => !foundWords.has(w.word)),
+    [puzzle.words, foundWords]
   );
 
   useEffect(() => {
     if (!state.settings.beginnerHints || isOver || paused) return undefined;
 
     assistRef.current = setTimeout(() => {
-      const word = puzzle.words.find((w) => !found.some((f) => f.word === w.word));
-      if (word) setHintCells([word.cells[0]]);
+      const word = puzzle.words.find((w) => !foundWords.has(w.word));
+      if (!word) return;
+      setHint({ cells: [word.cells[0]], nudge: true });
     }, IDLE_ASSIST_MS);
 
     return () => clearTimeout(assistRef.current);
-  }, [puzzle.words, found, isOver, paused]);
+  }, [puzzle.words, foundWords, isOver, paused]);
 
   /* -- selection ------------------------------------------------------- */
 
@@ -271,24 +387,11 @@ function Level({ level, active, go, onRestart }) {
     }));
   }, [size]);
 
-  const applySelection = useCallback((path) => {
-    setSelection((prev) => {
-      if (prev.length !== path.length) {
-        if (path.length) audio.sfxTick(path.length - 1);
-        if (path.length > prev.length) haptics.tapLight();
-        return path;
-      }
-      const last = path[path.length - 1];
-      const prevLast = prev[prev.length - 1];
-      if (last && prevLast && (last.row !== prevLast.row || last.col !== prevLast.col)) return path;
-      return prev;
-    });
-  }, []);
 
-  const finishLevel = useCallback((finalFound) => {
+  const finishLevel = useCallback(() => {
     // Read, don't bank: setting `result` tears down the timer effect, whose
-    // cleanup adds this same span to the accumulated total.
-    const ms = accumulatedRef.current + (performance.now() - resumedAtRef.current);
+    // cleanup adds the live span to the accumulated total.
+    const ms = elapsedMs();
     const stars = starsFor(level, { seconds: ms / 1000, hintsUsed: hintsRef.current });
     const reward = rewardFor(level, stars);
     const flawless = wrongRef.current === 0 && hintsRef.current === 0;
@@ -310,37 +413,18 @@ function Level({ level, active, go, onRestart }) {
     const xp = addXp(reward.xp);
 
     setResult({ stars, reward, ms, note, leveledUp: xp.leveledUp, playerLevel: xp.level });
-    void finalFound;
-  }, [level]);
+  }, [level, elapsedMs]);
 
   const acceptWord = useCallback((entry, cells) => {
     const colorIndex = puzzle.words.findIndex((w) => w.word === entry.word);
 
-    setFound((prev) => {
-      const next = [...prev, { word: entry.word, cells, colorIndex }];
-      if (next.length === puzzle.words.length) setTimeout(() => finishLevel(next), 520);
-      return next;
-    });
+    // Nothing but the new value here: a state updater must be pure, and
+    // under StrictMode React invokes it twice — scheduling the win from
+    // inside it awarded coins and XP twice on every level in development.
+    setFound((prev) => [...prev, { word: entry.word, cells, colorIndex }]);
 
-    setHintCells([]);
+    setHint(null);
     setPoppedCells(cells);
-    // Cover the full stagger: the last letter starts at (n-1)*55ms.
-    setTimeout(() => setPoppedCells([]), 680 + cells.length * 55);
-
-    // A spark at each letter, travelling along the word with the flip.
-    const rect = lettersRef.current?.getBoundingClientRect();
-    const points = geoRef.current?.pts;
-    if (rect && points) {
-      const color = wordColor(colorIndex);
-      cells.forEach((cell, i) => {
-        const pt = points[cell.row * size + cell.col];
-        if (!pt) return;
-        setTimeout(() => {
-          const local = toLocal(rect.left + pt.x, rect.top + pt.y);
-          sparkle(local.x, local.y, color);
-        }, i * 55);
-      });
-    }
 
     audio.sfxFound(found.length);
     haptics.success();
@@ -348,14 +432,55 @@ function Level({ level, active, go, onRestart }) {
     lastEventRef.current = performance.now();
 
     announce(`${entry.word} found. ${puzzle.words.length - found.length - 1} to go.`);
-  }, [puzzle.words, found.length, finishLevel, size]);
+  }, [puzzle.words, found.length]);
+
+  // The win is triggered here instead, where re-running is harmless and the
+  // delay is cancelled if the level is left before it fires.
+  useEffect(() => {
+    if (isOver || !puzzle.words.length || found.length !== puzzle.words.length) return undefined;
+    const id = setTimeout(finishLevel, 520);
+    return () => clearTimeout(id);
+  }, [found.length, puzzle.words.length, isOver, finishLevel]);
+
+  // Clearing the flip is an effect, not a bare timer: finding a second word
+  // inside the first one's ~1s window would otherwise let the stale timer
+  // cut the new word's stagger short. Re-running cancels the old timer, and
+  // unmounting cancels this one.
+  useEffect(() => {
+    if (!poppedCells.length) return undefined;
+    // Cover the full stagger: the last letter starts at (n-1)*55ms.
+    const id = setTimeout(() => setPoppedCells(NO_CELLS), 680 + poppedCells.length * 55);
+    return () => clearTimeout(id);
+  }, [poppedCells]);
+
+  // Sparks travel along the word with the flip. Also an effect, so quitting
+  // or restarting mid-animation cannot draw particles onto the next screen
+  // at coordinates from a board that is no longer there.
+  useEffect(() => {
+    const latest = found[found.length - 1];
+    const rect = lettersRef.current?.getBoundingClientRect();
+    const points = geoRef.current?.pts;
+    if (!latest || !rect || !points) return undefined;
+
+    const color = wordColor(latest.colorIndex);
+    const timers = latest.cells.map((cell, i) => {
+      const pt = points[cell.row * size + cell.col];
+      if (!pt) return 0;
+      return setTimeout(() => {
+        const local = toLocal(rect.left + pt.x, rect.top + pt.y);
+        sparkle(local.x, local.y, color);
+      }, i * 55);
+    });
+
+    return () => timers.forEach(clearTimeout);
+  }, [found, size]);
 
   const commitSelection = useCallback((path) => {
     const text = path.map((p) => letterAt(p.row, p.col)).join("");
     const reversed = text.split("").reverse().join("");
 
     const match = puzzle.words.find(
-      (entry) => !found.some((f) => f.word === entry.word) &&
+      (entry) => !foundWords.has(entry.word) &&
         (entry.word === text || entry.word === reversed)
     );
 
@@ -370,8 +495,7 @@ function Level({ level, active, go, onRestart }) {
       shakeRef.current = setTimeout(() => boardRef.current?.classList.remove("is-shake"), 340);
     }
 
-    setSelection([]);
-  }, [puzzle.words, found, letterAt, acceptWord]);
+  }, [puzzle.words, foundWords, letterAt, acceptWord]);
 
   /* -- pointer --------------------------------------------------------- */
 
@@ -382,13 +506,13 @@ function Level({ level, active, go, onRestart }) {
 
     e.preventDefault();
     audio.unlock();
-    setHintCells([]);
+    setHint(null);
     setKeyboardMode(false);
 
     const anchor = { row: Number(cell.dataset.row), col: Number(cell.dataset.col) };
     anchorRef.current = anchor;
     draggingRef.current = true;
-    setCursor(anchor);
+    moveCursor(anchor);
     applySelection([anchor]);
 
     try {
@@ -396,7 +520,7 @@ function Level({ level, active, go, onRestart }) {
     } catch {
       /* Some browsers reject capture for mouse; the drag still works. */
     }
-  }, [isOver, paused, applySelection]);
+  }, [isOver, paused, applySelection, moveCursor]);
 
   const onPointerMove = useCallback((e) => {
     if (!draggingRef.current || !anchorRef.current) return;
@@ -420,11 +544,9 @@ function Level({ level, active, go, onRestart }) {
       /* already released */
     }
 
-    setSelection((path) => {
-      if (path.length) commitSelection(path);
-      return [];
-    });
-  }, [commitSelection]);
+    const path = takeSelection();
+    if (path.length) commitSelection(path);
+  }, [commitSelection, takeSelection]);
 
   /* -- keyboard -------------------------------------------------------- */
 
@@ -436,17 +558,18 @@ function Level({ level, active, go, onRestart }) {
     if (steps[e.key]) {
       e.preventDefault();
       setKeyboardMode(true);
+      // Same as a pointer press: the player is engaged, so stop nudging.
+      setHint(null);
       const [dr, dc] = steps[e.key];
-      setCursor((prev) => {
-        const next = {
-          row: Math.min(size - 1, Math.max(0, prev.row + dr)),
-          col: Math.min(size - 1, Math.max(0, prev.col + dc))
-        };
-        const node = lettersRef.current?.children[next.row * size + next.col];
-        node?.focus({ preventScroll: true });
-        if (anchorRef.current) applySelection(snapPath(anchorRef.current, next.row, next.col));
-        return next;
-      });
+      const prev = cursorRef.current;
+      const next = {
+        row: Math.min(size - 1, Math.max(0, prev.row + dr)),
+        col: Math.min(size - 1, Math.max(0, prev.col + dc))
+      };
+
+      moveCursor(next);
+      lettersRef.current?.children[next.row * size + next.col]?.focus({ preventScroll: true });
+      if (anchorRef.current) applySelection(snapPath(anchorRef.current, next.row, next.col));
       return;
     }
 
@@ -457,17 +580,15 @@ function Level({ level, active, go, onRestart }) {
 
       if (anchorRef.current) {
         anchorRef.current = null;
-        setSelection((path) => {
-          if (path.length) commitSelection(path);
-          return [];
-        });
+        const path = takeSelection();
+        if (path.length) commitSelection(path);
       } else {
         const cell = e.target.closest(".cell");
         const anchor = cell
           ? { row: Number(cell.dataset.row), col: Number(cell.dataset.col) }
-          : cursor;
+          : cursorRef.current;
         anchorRef.current = anchor;
-        setCursor(anchor);
+        moveCursor(anchor);
         applySelection([anchor]);
         announce("Word started. Use arrow keys to extend, Enter to finish.");
       }
@@ -477,10 +598,10 @@ function Level({ level, active, go, onRestart }) {
     if (e.key === "Escape" && anchorRef.current) {
       e.preventDefault();
       anchorRef.current = null;
-      setSelection([]);
+      takeSelection();
       announce("Selection cancelled.");
     }
-  }, [isOver, paused, size, cursor, applySelection, snapPath, commitSelection]);
+  }, [isOver, paused, size, applySelection, snapPath, commitSelection, takeSelection, moveCursor]);
 
   /* -- hints ----------------------------------------------------------- */
 
@@ -503,13 +624,16 @@ function Level({ level, active, go, onRestart }) {
     // Two letters, not one: a single letter is not enough of a foothold on a
     // 12x12 board to feel like value for the coins.
     const cells = word.cells.slice(0, 2);
-    setHintCells(cells);
+    setHint({ cells, nudge: false });
     toast(`${word.word} starts here`, "good");
     announce(`Hint: ${word.word} starts at row ${cells[0].row + 1}, column ${cells[0].col + 1}.`);
-    setTimeout(() => setHintCells([]), 6000);
+    setTimeout(() => setHint(null), 6000);
   }, [isOver, nextUnfound]);
 
   /* -- win sequence ---------------------------------------------------- */
+
+  // Held so leaving the screen can cancel a celebration already in flight.
+  const winTimersRef = useRef([]);
 
   useEffect(() => {
     if (!result) return undefined;
@@ -551,12 +675,24 @@ function Level({ level, active, go, onRestart }) {
       ));
     });
 
+    winTimersRef.current = timers;
     return () => timers.forEach(clearTimeout);
   }, [result]);
 
   useEffect(() => {
     announce(`${level.title}. Find ${level.wordCount} words.`);
   }, [level]);
+
+  // Leaving mid-celebration takes the confetti and the rest of the win
+  // sequence with it. Restarting remounts <Level>, so that path is covered by
+  // the unmount cleanup below.
+  useOnDeactivate(active, () => {
+    winTimersRef.current.forEach(clearTimeout);
+    winTimersRef.current = [];
+    clearParticles();
+  });
+
+  useEffect(() => clearParticles, []);
 
   /* -- derived --------------------------------------------------------- */
 
@@ -572,9 +708,10 @@ function Level({ level, active, go, onRestart }) {
   );
 
   const hintSet = useMemo(
-    () => new Set(hintCells.map((c) => c.row * size + c.col)),
-    [hintCells, size]
+    () => new Set((hint?.cells ?? []).map((c) => c.row * size + c.col)),
+    [hint, size]
   );
+
 
   // Cell index -> position in the word, so each letter flips in sequence.
   const poppedOrder = useMemo(() => {
@@ -622,14 +759,13 @@ function Level({ level, active, go, onRestart }) {
           </span>
         </div>
         <div className="play-meta">
-          <div
-            className={`timer${elapsed / 1000 > level.parSeconds ? " is-over" : ""}`}
-            role="timer"
-            aria-label="Elapsed time"
-            hidden={!state.settings.showTimer}
-          >
-            {formatTime(elapsed)}
-          </div>
+          <Timer
+            running={!paused && !isOver}
+            parSeconds={level.parSeconds}
+            accumulatedRef={accumulatedRef}
+            resumedAtRef={resumedAtRef}
+            runningRef={runningRef}
+          />
         </div>
       </div>
 
@@ -639,8 +775,8 @@ function Level({ level, active, go, onRestart }) {
             <div
               key={entry.word}
               role="listitem"
-              className={`word-pill${found.some((f) => f.word === entry.word) ? " is-found" : ""}`}
-              style={{ "--pill": `var(--w${(i % 9) + 1})` }}
+              className={`word-pill${foundWords.has(entry.word) ? " is-found" : ""}`}
+              style={{ "--pill": `var(${wordVar(i)})` }}
             >
               {entry.word}
             </div>
@@ -661,7 +797,7 @@ function Level({ level, active, go, onRestart }) {
               aria-hidden="true"
             >
               {found.map((f) =>
-                capsule(f.cells, f.word, "wordline wordline--found", `var(--w${(f.colorIndex % 9) + 1})`)
+                capsule(f.cells, f.word, "wordline wordline--found", `var(${wordVar(f.colorIndex)})`)
               )}
               {selection.length ? capsule(selection, "active", "wordline wordline--active") : null}
             </svg>
@@ -697,12 +833,12 @@ function Level({ level, active, go, onRestart }) {
       </div>
 
       <div className="play-foot">
-        <div className="foot-progress">
+        <div className={`foot-progress${found.length ? " is-advanced" : ""}`} key={found.length}>
           <ProgressBar value={total ? found.length / total : 0} />
           <small>{`${found.length} of ${total} found`}</small>
         </div>
         <button
-          className="hint-btn"
+          className={`hint-btn${hint?.nudge ? " is-nudging" : ""}`}
           type="button"
           aria-label={`Hint, costs ${HINT_COST} coins`}
           disabled={found.length >= total || state.profile.coins < HINT_COST}
@@ -715,7 +851,13 @@ function Level({ level, active, go, onRestart }) {
       </div>
 
       {/* Pause */}
-      <div className={`overlay${paused ? " is-open" : ""}`} role="dialog" aria-label="Paused">
+      <div
+        className={`overlay${paused ? " is-open" : ""}`}
+        role="dialog"
+        aria-label="Paused"
+        aria-hidden={paused ? undefined : "true"}
+        inert={!paused}
+      >
         <div className="overlay-card">
           <h3>Paused</h3>
           <p className="sub">Take your time — the clock is stopped.</p>
@@ -739,7 +881,13 @@ function Level({ level, active, go, onRestart }) {
       </div>
 
       {/* Win */}
-      <div className={`overlay${result ? " is-open" : ""}`} role="dialog" aria-label="Level complete">
+      <div
+        className={`overlay${result ? " is-open" : ""}`}
+        role="dialog"
+        aria-label="Level complete"
+        aria-hidden={result ? undefined : "true"}
+        inert={!result}
+      >
         <div className="overlay-card">
           <h3>{result?.stars === 3 ? "Perfect!" : "Level complete!"}</h3>
           <p className="sub">{result?.note}</p>

@@ -2,14 +2,17 @@
   "name": "Word Search Journey",
   "short_name": "Word Journey",
   "description": "A relaxing word search game: 80 levels across 10 themed chapters, daily puzzles, and offline play.",
-  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#9de7ec",
   "theme_color": "#9de7ec",
-  "categories": ["games", "puzzle", "word"],
+  "categories": [
+    "games",
+    "puzzle",
+    "word"
+  ],
   "icons": [
     {
       "src": "./icons/icon.svg",

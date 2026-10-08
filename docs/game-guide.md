@@ -236,6 +236,31 @@ reads tolerate a corrupt or missing file by falling back to defaults, so a
 blocked-storage browser still plays — it just will not remember. Nothing is
 sent anywhere; there is no network call after load.
 
+## Known follow-ups
+
+Deliberately left alone, with reasons — a review pass surfaced these and they
+were judged not worth the churn at the time:
+
+- **`PlayScreen.jsx` is ~850 lines** and holds three cohesive clusters that
+  would each extract cleanly into `lib/hooks.js`: the clock (`usePlayClock`),
+  the win choreography (`useWinSequence`), and board geometry
+  (`useBoardGeometry`). Worth doing next time someone works in that file;
+  there is no behaviour change in it, so it was not worth the risk on its own.
+- **Drag hit-testing uses `document.elementFromPoint`** on every pointermove,
+  which forces a layout flush, even though cell centres are already cached in
+  `geoRef`. Arithmetic against the cached rect would be cheaper. Left as-is
+  because dragging is the core interaction and the current code is heavily
+  tested — a cleanup pass is the wrong place to risk it.
+- **`.overlay` (pause/win) and `.sheet` (modal) are two dialog systems** with
+  near-identical CSS. The part that actually mattered — closed dialogs keeping
+  their buttons in the tab order — is fixed; merging the styles is cosmetic.
+- **`lib/store.js` imports React**, so the "framework-free" `lib/` boundary is
+  only partly real: six modules depend on React transitively through it.
+  Moving `useStoreVersion` into its own module would restore the claim.
+- **`lib/store.js` and `lib/overlays.js` each hand-roll subscribe/notify.**
+  Only the core is shared; the shapes genuinely differ (mutable singleton vs
+  immutable snapshot), so one primitive would likely be worse than two.
+
 ## Changing things
 
 - **Words and themes**: `app/src/lib/words.js`. Keep entries A-Z only, 3-10

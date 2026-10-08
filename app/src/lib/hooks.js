@@ -1,6 +1,6 @@
 /** Shared hooks. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { state } from "./store.js";
 
 const prefersReduced = () =>
@@ -44,4 +44,25 @@ export function useCountUp(target, { duration = 800, delay = 0 } = {}) {
   }, [target, duration, delay]);
 
   return value;
+}
+
+/**
+ * Run `fn` when a screen stops being the active one.
+ *
+ * Screens stay mounted once visited, so unmount cleanup is the wrong hook for
+ * "the player left this screen" — it only fires on a remount (a level
+ * restart), never on navigation. This is the signal that actually fires.
+ */
+export function useOnDeactivate(active, fn) {
+  const latest = useRef(fn);
+
+  useEffect(() => {
+    latest.current = fn;
+  });
+
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (wasActive.current && !active) latest.current();
+    wasActive.current = active;
+  }, [active]);
 }

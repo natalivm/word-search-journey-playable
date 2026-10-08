@@ -13,6 +13,7 @@ import {
   starsEarned, starsPossible, dailyDone
 } from "../lib/store.js";
 import { levelAt, TOTAL_LEVELS, todayKey } from "../lib/levels.js";
+import { formatNumber } from "../lib/format.js";
 import * as audio from "../lib/audio.js";
 import * as haptics from "../lib/haptics.js";
 
@@ -71,7 +72,7 @@ export default function HomeScreen({ go }) {
         </button>
 
         <div className="home-wallet">
-          <span className="chip chip--coin">🪙<b>{state.profile.coins.toLocaleString()}</b></span>
+          <span className="chip chip--coin">🪙<b>{formatNumber(state.profile.coins)}</b></span>
           <span className="chip chip--streak">🔥<b>{state.daily.streak}</b></span>
         </div>
       </div>

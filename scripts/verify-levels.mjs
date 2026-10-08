@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const { levelAt, dailyLevel, TOTAL_LEVELS, DIRS } = await import(
+const { levelAt, dailyLevel, todayKey, TOTAL_LEVELS, DIRS } = await import(
   join(root, "app/src/lib/levels.js")
 );
 const { generate } = await import(join(root, "app/src/lib/generator.js"));
@@ -87,8 +87,8 @@ const start = new Date(2026, 0, 1);
 for (let day = 0; day < 365; day += 1) {
   const date = new Date(start);
   date.setDate(start.getDate() + day);
-  const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  check(dailyLevel(key));
+  // The game's own key function, so the verifier cannot drift from it.
+  check(dailyLevel(todayKey(date)));
 }
 
 // Generation must be reproducible or saved progress would stop matching the

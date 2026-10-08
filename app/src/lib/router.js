@@ -35,13 +35,16 @@ export function toHash(name, params = {}) {
   return `#/${name}${query ? `?${query}` : ""}`;
 }
 
-function nextState(prev, route, depth) {
+/**
+ * @param {"forward"|"back"} dir how this move should read. Every entry point
+ *   knows its own direction; only the history listener has to infer one.
+ */
+function nextState(prev, route, depth, dir) {
   // `popstate` and `hashchange` both fire for a browser back, and the second
-  // one would otherwise recompute the direction against already-updated
-  // state and flip it. Returning `prev` also lets React skip the re-render.
+  // would otherwise recompute against already-updated state. Returning `prev`
+  // unchanged also lets React skip the re-render.
   if (
     prev.depth === depth &&
-    prev.route.name === route.name &&
     toHash(prev.route.name, prev.route.params) === toHash(route.name, route.params)
   ) {
     return prev;
@@ -50,9 +53,7 @@ function nextState(prev, route, depth) {
   return {
     route,
     depth,
-    // Travelling to a shallower history entry is a "back"; the screen
-    // transition slides the other way for it.
-    dir: depth < prev.depth ? "back" : "forward",
+    dir,
     params: { ...prev.params, [route.name]: route.params },
     visited: prev.visited.has(route.name)
       ? prev.visited
@@ -92,8 +93,9 @@ export function useRouter() {
         );
       }
 
+      const dir = depth < depthRef.current ? "back" : "forward";
       depthRef.current = depth;
-      setNav((prev) => nextState(prev, route, depth));
+      setNav((prev) => nextState(prev, route, depth, dir));
     };
 
     window.addEventListener("popstate", onPop);
@@ -120,21 +122,25 @@ export function useRouter() {
     const depth = (window.history.state?.depth ?? 0) + 1;
     window.history.pushState({ name, params, depth }, "", hash);
     depthRef.current = depth;
-    setNav((prev) => nextState(prev, { name, params }, depth));
+    setNav((prev) => nextState(prev, { name, params }, depth, "forward"));
   }, []);
 
-  const replace = useCallback((name, params = {}) => {
+  // Replacing keeps the same depth, so the direction cannot be inferred —
+  // the caller says which way it should read.
+  const replace = useCallback((name, params = {}, dir = "forward") => {
     const depth = window.history.state?.depth ?? 0;
     window.history.replaceState({ name, params, depth }, "", toHash(name, params));
     depthRef.current = depth;
-    setNav((prev) => nextState(prev, { name, params }, depth));
+    setNav((prev) => nextState(prev, { name, params }, depth, dir));
   }, []);
 
   const back = useCallback((fallback = "home") => {
     // Only step back if this session put something behind us; otherwise a
     // deep link would walk the player out of the game.
     if ((window.history.state?.depth ?? 0) > 0) window.history.back();
-    else replace(fallback);
+    // A deep-linked player has nothing behind them, so this is a replace at
+    // the same depth — say explicitly that it should animate as a back step.
+    else replace(fallback, {}, "back");
   }, [replace]);
 
   return {

@@ -104,7 +104,12 @@ export function todayKey(date = new Date()) {
  * The daily puzzle: same for everyone on a given date, always a fixed shape
  * so the leaderboard-free "did you beat it?" comparison stays fair.
  */
-export function dailyLevel(dateKey = todayKey()) {
+export function dailyLevel(requestedKey = todayKey()) {
+  // The key reaches us from the URL, so it can be anything. An unparsable
+  // date would index CHAPTERS with NaN and take the whole app down on the
+  // first property read; fall back to today instead.
+  const parsed = Date.parse(`${requestedKey}T00:00:00`);
+  const dateKey = Number.isFinite(parsed) ? requestedKey : todayKey();
   const dayIndex = Math.floor(Date.parse(`${dateKey}T00:00:00`) / 86400000);
   const chapter = CHAPTERS[Math.abs(dayIndex) % CHAPTERS.length];
 

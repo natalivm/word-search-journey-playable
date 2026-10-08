@@ -413,23 +413,18 @@
 .node.is-next {
   background: var(--accent);
   color: #fff;
-  animation:
-    nodeIn 480ms var(--ease-spring) backwards,
-    nodeGlow 2.4s var(--ease-out) 600ms infinite;
+  /* A real shadow, not one that only exists inside the keyframes: under
+     reduced motion the animation is suppressed and the node would otherwise
+     lose its accent glow entirely. */
+  box-shadow: 0 10px 22px var(--accent-shadow);
+  /* Repeating the delay keeps this node in the trail's arrival stagger — the
+     `animation` shorthand resets animation-delay inherited from .node. */
+  animation: nodeIn 480ms var(--ease-spring) calc(var(--step, 0) * 45ms) backwards;
 }
 
-@keyframes nodeGlow {
-  0%, 100% {
-    box-shadow: 0 10px 22px var(--accent-shadow);
-  }
-  50% {
-    /* Fallback first, for browsers without color-mix(). */
-    box-shadow: 0 14px 30px var(--accent-shadow), 0 0 0 5px var(--accent-shadow);
-    box-shadow:
-      0 14px 30px var(--accent-shadow),
-      0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent);
-  }
-}
+/* The pulse rides on the ring (see .node-ping), which animates opacity and
+   transform only. Nothing here animates the node's own box, so the tap
+   target stays exactly where a thumb expects it. */
 
 .node-ping {
   position: absolute;
@@ -437,6 +432,11 @@
   border: 3px solid var(--accent);
   border-radius: var(--r-lg);
   opacity: 0;
+}
+
+/* Inactive screens are hidden, not removed, so scope the loop to the one
+   screen that can actually be seen. */
+.screen.is-active .node-ping {
   animation: ping 1.8s var(--ease-out) infinite;
 }
 
@@ -738,12 +738,16 @@
     width var(--dur-fast) var(--ease-out);
 }
 
-/* The knob stretches as it travels, the way a physical switch would. */
+/* The knob stretches as it travels, the way a physical switch would.
+   Both rules must key off the row: :active matches the pressed element and
+   its ancestors, never its descendants, so `.switch:active` never fires and
+   an "on" knob would stretch without being pulled back — 3 + 20 + 30 = 53px
+   of knob in a 50px track. */
 .set-row:active .switch i {
   width: 30px;
 }
 
-.switch.is-on:active i {
+.set-row:active .switch.is-on i {
   transform: translateX(14px);
 }
 

@@ -109,7 +109,7 @@ export function checkAchievements() {
   const fresh = [];
 
   for (const achievement of ACHIEVEMENTS) {
-    if (state.achievements[achievement.id]) continue;
+    if (isUnlocked(achievement.id)) continue;
     const [have, need] = achievement.progress();
     if (have >= need) {
       state.achievements[achievement.id] = Date.now();
@@ -122,4 +122,4 @@ export function checkAchievements() {
 }
 
 export const unlockedCount = () =>
-  ACHIEVEMENTS.filter((a) => state.achievements[a.id]).length;
+  ACHIEVEMENTS.filter((a) => isUnlocked(a.id)).length;

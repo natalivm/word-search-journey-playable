@@ -29,8 +29,16 @@ const files = walk(dist)
   .map((f) => f.split("\\").join("/"))
   .sort();
 
-// Hash the asset names so the cache key changes whenever the build does.
-const hash = createHash("sha256").update(files.join("\n")).digest("hex").slice(0, 10);
+// Hash file *contents*, not just names. Vite hashes JS and CSS filenames, but
+// index.html, the manifest and the icons keep stable names — hashing names
+// alone would leave installed players on a stale shell after an HTML-only
+// change, because the cache name would not move.
+const digest = createHash("sha256");
+for (const name of files) {
+  digest.update(name);
+  digest.update(readFileSync(join(dist, name)));
+}
+const hash = digest.digest("hex").slice(0, 10);
 
 const assets = ["./", ...files.map((f) => `./${f}`)];
 const swPath = join(dist, "sw.js");

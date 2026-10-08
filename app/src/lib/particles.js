@@ -17,6 +17,9 @@ let canvas = null;
 let ctx = null;
 let raf = 0;
 let last = 0;
+// celebrate() spreads its emission over time; these let stop() cancel the
+// tail so a celebration cannot keep spawning onto whatever screen follows.
+let pending = [];
 
 /** @type {{x:number,y:number,vx:number,vy:number,size:number,color:string,rot:number,vrot:number,age:number,life:number,gravity:number,drag:number,shape:string,fade:number}[]} */
 let live = [];
@@ -70,6 +73,8 @@ function ensureLoop() {
 function stop() {
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
+  pending.forEach(clearTimeout);
+  pending = [];
   live = [];
   if (ctx && canvas) ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 }
@@ -224,7 +229,7 @@ export function celebrate(count = 90) {
   const w = canvas.clientWidth;
 
   for (let i = 0; i < count; i += 1) {
-    setTimeout(() => {
+    pending.push(setTimeout(() => {
       emit({
         x: rand(0, w),
         y: rand(-40, -6),
@@ -241,7 +246,7 @@ export function celebrate(count = 90) {
         shape: Math.random() > 0.78 ? "star" : "rect",
         fade: 0.75
       });
-    }, (i / count) * 650);
+    }, (i / count) * 650));
   }
 }
 
