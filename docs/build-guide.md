@@ -1,5 +1,8 @@
 # Word Search Journey Playable Ad Guide
 
+> This document covers the **playable ad creative** in `playable-ad/`.
+> For the full game in `game/`, see [`game-guide.md`](./game-guide.md).
+
 ## Goal
 
 Create a short HTML5 playable ad that lets a user finish one real word-search level, celebrates the win, then sends the user to the correct store from the install CTA.
@@ -37,8 +40,9 @@ The current MVP is a single-file playable:
 
 For GitHub Pages preview, the repo also includes:
 
-- `index.html`: redirects the repo root to `./playable-ad/`
+- `index.html`: a landing page linking to the game, the playable ad and these docs
 - `.nojekyll`: tells GitHub Pages to serve files as plain static assets
+- `game/`: the full word search game (see [`game-guide.md`](./game-guide.md))
 
 It includes:
 
@@ -98,13 +102,14 @@ The preview URL will look like:
 https://YOUR_USERNAME.github.io/YOUR_REPOSITORY/
 ```
 
-That root URL redirects to:
+From there:
 
 ```text
-https://YOUR_USERNAME.github.io/YOUR_REPOSITORY/playable-ad/
+.../game/          the full game
+.../playable-ad/   the ad creative
 ```
 
-The playable uses relative paths only, so it works under a GitHub Pages project path.
+Both use relative paths only, so they work under a GitHub Pages project path.
 
 ## Network Notes
 
@@ -130,3 +135,19 @@ Avoid:
    - More dramatic end-card reward
 4. Run network validators.
 5. Upload to the selected ad network.
+
+## Relationship to the game
+
+The ad and the game are deliberately separate builds:
+
+| | `playable-ad/` | `game/` |
+| --- | --- | --- |
+| Shape | one self-contained HTML file | multi-file ES-module app |
+| Content | one hard-coded level, four words | 80 generated levels + daily puzzle |
+| Goal | drive a store install | retain a player |
+| Constraints | ad-network ZIP limits, MRAID | installable PWA, offline play |
+
+Keeping them apart means the ad stays inside network size limits and has no
+module loading to trip over inside an ad webview, while the game is free to
+be structured for maintenance. If the ad and the game should ever share a
+look, `game/css/tokens.css` is the source of truth for colour and type.

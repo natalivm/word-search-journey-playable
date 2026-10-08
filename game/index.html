@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <!-- viewport-fit=cover so the app can paint under the notch and home bar;
+       pinch zoom is deliberately left enabled for accessibility. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Word Search Journey — a relaxing word search game with 80 levels across 10 themed chapters, daily puzzles and offline play.">
+  <meta name="theme-color" content="#9de7ec">
+  <meta name="color-scheme" content="light dark">
+
+  <!-- Standalone/home-screen behaviour -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Word Journey">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/icon-180.png">
+
+  <title>Word Search Journey</title>
+
+  <link rel="stylesheet" href="./css/tokens.css">
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/screens.css">
+  <link rel="stylesheet" href="./css/game.css">
+
+  <script>
+    // Apply the saved theme before first paint so there is no white flash on
+    // a dark-mode device. Kept inline and tiny on purpose.
+    (function () {
+      try {
+        var saved = JSON.parse(localStorage.getItem("wsj.save") || "{}");
+        var pref = (saved.settings && saved.settings.theme) || "auto";
+        var dark = pref === "dark" ||
+          (pref === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        var root = document.documentElement;
+        root.dataset.theme = dark ? "dark" : "light";
+        if (saved.settings) {
+          root.dataset.cvd = saved.settings.cvd ? "on" : "off";
+          root.dataset.contrast = saved.settings.contrast ? "high" : "normal";
+          root.dataset.motion = saved.settings.reduceMotion ? "reduced" : "full";
+        }
+        document.querySelector('meta[name="theme-color"]')
+          .setAttribute("content", dark ? "#141c2e" : "#9de7ec");
+      } catch (e) {
+        /* First run, or storage blocked. The default light theme is fine. */
+      }
+    }());
+  </script>
+</head>
+
+<body>
+  <div id="app">
+    <!-- Router mounts each screen in here. -->
+    <div id="screens"></div>
+
+    <!-- Shared overlay hosts, ordered by stacking concern. -->
+    <div id="fxHost" aria-hidden="true"></div>
+    <div id="toastHost" aria-hidden="true"></div>
+    <div id="modalHost" inert></div>
+
+    <div id="installBar" hidden>
+      <p>Add to home screen<small>Play offline, full screen</small></p>
+      <button type="button" data-act="install">Install</button>
+      <button type="button" data-act="dismiss" aria-label="Dismiss">Not now</button>
+    </div>
+
+    <!-- Status messages for screen readers; visually hidden. -->
+    <p id="live" class="sr-only" role="status" aria-live="polite"></p>
+
+    <div id="boot">
+      <div class="boot-inner">
+        <div class="boot-mark">W</div>
+        <p>Word Search Journey</p>
+      </div>
+    </div>
+  </div>
+
+  <noscript>
+    <p style="padding:24px;text-align:center;font-family:system-ui">
+      Word Search Journey needs JavaScript enabled to play.
+    </p>
+  </noscript>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

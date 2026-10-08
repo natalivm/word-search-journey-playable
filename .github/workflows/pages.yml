@@ -18,12 +18,17 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate playable
+    name: Validate
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Validate static files
         run: |
@@ -31,7 +36,64 @@ jobs:
           test -f playable-ad/index.html
           test -f .nojekyll
           grep -q './playable-ad/' index.html
+          grep -q './game/' index.html
           grep -q 'com.playvalve.wsjourney' playable-ad/index.html
+
+      - name: Validate game files
+        run: |
+          test -f game/index.html
+          test -f game/manifest.webmanifest
+          test -f game/sw.js
+          test -f game/icons/icon-192.png
+          test -f game/icons/icon-512.png
+          test -f game/icons/icon-maskable-512.png
+          node -e "JSON.parse(require('fs').readFileSync('game/manifest.webmanifest','utf8'))"
+
+      - name: Check every asset the service worker pre-caches exists
+        run: |
+          node -e "
+            const fs = require('fs');
+            const src = fs.readFileSync('game/sw.js', 'utf8');
+            const list = src.slice(src.indexOf('const ASSETS'), src.indexOf('];', src.indexOf('const ASSETS')));
+            const paths = [...list.matchAll(/\"\.\/([^\"]+)\"/g)].map(m => 'game/' + m[1]);
+            const missing = paths.filter(p => !fs.existsSync(p));
+            if (missing.length) {
+              console.error('Service worker pre-caches files that do not exist:');
+              for (const p of missing) console.error('  ' + p);
+              process.exit(1);
+            }
+            console.log('All ' + paths.length + ' pre-cached assets exist.');
+          "
+
+      - name: Check every module the game imports resolves
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const root = 'game/js';
+            let checked = 0;
+            const walk = (dir) => {
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) { walk(full); continue; }
+                if (!entry.name.endsWith('.js')) continue;
+                const src = fs.readFileSync(full, 'utf8');
+                for (const m of src.matchAll(/from\s+[\"'](\.[^\"']+)[\"']/g)) {
+                  const target = path.resolve(path.dirname(full), m[1]);
+                  checked++;
+                  if (!fs.existsSync(target)) {
+                    console.error('Unresolved import ' + m[1] + ' in ' + full);
+                    process.exit(1);
+                  }
+                }
+              }
+            };
+            walk(root);
+            console.log('All ' + checked + ' relative imports resolve.');
+          "
+
+      - name: Generate every level and verify the puzzles are solvable
+        run: node scripts/verify-levels.mjs
 
       - name: Package playable ZIP
         run: bash scripts/package.sh
@@ -73,7 +135,7 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html .nojekyll _site/
-          cp -R playable-ad docs dist artifacts _site/
+          cp -R game playable-ad docs dist artifacts _site/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
