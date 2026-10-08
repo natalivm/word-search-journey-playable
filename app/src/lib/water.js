@@ -61,11 +61,22 @@ float noise(vec2 p) {
 
 /* The swell. Each wave is bent by another wave rather than added to one, so
    the contours curve and meander the way a brush draws them, instead of
-   crossing into the plaid that plain summed sines give you. Roughly -1..1. */
+   crossing into the plaid that plain summed sines give you. Roughly -1..1.
+
+   The numbers after t are angular frequencies, and they are not free. Deep
+   water disperses: a wave of length L travels at sqrt(gL / 2pi), so every
+   component's speed is fixed by its own wavelength, and the long ones outrun
+   the short ones. These are C * sqrt(k) for a single calibration C, which is
+   that relation — the ordering is the part the eye actually reads as water.
+
+   Every term subtracts t rather than adding it, so the whole field travels
+   one way, like a breeze crossing the pool. Mixed signs make it stand and
+   boil in place, which is the thing that reads as "too fast" however slowly
+   it is run. */
 float swell(vec2 p, float t) {
-  float v = sin(p.x * 1.55 + t * 0.55 + sin(p.y * 0.85 - t * 0.37) * 1.25);
-  v += 0.72 * sin(p.y * 1.25 - t * 0.47 + sin(p.x * 1.05 + t * 0.29) * 1.35);
-  v += 0.42 * sin((p.x + p.y) * 2.05 + t * 0.81);
+  float v = sin(p.x * 1.55 - t * 0.317 + sin(p.y * 0.85 - t * 0.234) * 1.25);
+  v += 0.72 * sin(p.y * 1.25 - t * 0.284 + sin(p.x * 1.05 - t * 0.261) * 1.35);
+  v += 0.42 * sin((p.x + p.y) * 2.05 - t * 0.433);
   return v / 2.14;
 }
 
@@ -100,8 +111,16 @@ void main() {
   /* Held frames. Painted animation runs on twos and threes rather than on
      every frame, and water drawn by hand moves in steps — so the whole
      surface is quantised to 12 a second. It is the single strongest cue that
-     this was painted rather than simulated. */
-  float t = floor(uTime * 12.0) / 12.0;
+     this was painted rather than simulated.
+
+     Speed is no longer a free parameter: it lives in the angular frequencies
+     inside swell(), where the dispersion relation puts it. What is left here
+     is the cadence, and the glints' own clock — capillary ripples oscillate
+     far faster than the swell they ride on, so the sparkle twinkles while the
+     surface drifts. */
+  float held = floor(uTime * 12.0) / 12.0;
+  float t = held;
+  float tSpark = held * 1.2;
 
   float h = swell(p, t);
   float depth = clamp(gl_FragCoord.y / uRes.y, 0.0, 1.0);
@@ -137,7 +156,7 @@ void main() {
   col = mix(col, mix(col, uGlow, 0.55), under * 0.6 * uStrength);
 
   /* Glints ride the brighter water, where the light would be catching it. */
-  float sparkle = glints(p * 1.45 + vec2(0.0, t * 0.05), t) * smoothstep(0.25, 0.75, tone);
+  float sparkle = glints(p * 1.45 + vec2(0.0, t * 0.05), tSpark) * smoothstep(0.25, 0.75, tone);
   col = mix(col, uGlow, clamp(sparkle, 0.0, 1.0) * 0.85 * uStrength);
 
   /* A trace of tooth, so the flat areas read as paint on paper rather than

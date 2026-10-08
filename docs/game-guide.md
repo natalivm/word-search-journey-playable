@@ -176,6 +176,38 @@ pool would sit oddly under a map of cartoon floats:
 - Time is **held on twos**, quantised to 12 a second. Painted animation does
   not move on every frame, and that is the single strongest cue that this was
   drawn rather than computed.
+- The speeds are **not a taste knob**. See below.
+
+### How fast the water moves
+
+Speed was tuned by eye twice and was wrong both times, so it is derived now.
+
+The scene has a scale: a float is 106px across and a swim ring is about 0.8m,
+which puts the view at roughly 132px per metre — about 6.4m of pool from top
+to bottom.
+
+Deep water disperses. A wave of length L travels at sqrt(gL / 2π), so each
+component's speed follows from its own wavelength and the long ones outrun the
+short ones; the angular frequencies in `swell()` are `C * sqrt(k)` for one
+calibration `C`, which is that relation. The ordering is the part the eye
+reads as water, more than any absolute number.
+
+Two consequences worth writing down:
+
+- **Every component travels the same way.** Mixed signs make the field stand
+  and boil in place, and boiling reads as "too fast" however slowly it is run.
+  A single drift direction is a breeze crossing a pool.
+- **There is a floor.** Phase speed has a minimum of about 0.23m/s at the
+  1.7cm gravity-capillary crossover — no wave of any length travels slower
+  than that. The calibration sits the dominant component just above it, which
+  measures as 0.29m/s (about 39px/s) across the screen. Earlier attempts ran
+  at 0.20m/s and then 0.10m/s, which is why they read as syrup: that is not
+  slow water, it is water doing something water cannot do.
+
+The one deliberate liberty: the painted shapes are metres across, and real
+waves that long travel at 2-3m/s and would cross this view in about a second.
+They are moved at the capillary-minimum speed instead. The relationships are
+physical; the absolute is anchored at the slowest water that can exist.
 
 Four things keep it honest:
 
