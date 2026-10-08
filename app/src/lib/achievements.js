@@ -6,8 +6,9 @@
  * locked badges still read as goals rather than blanks.
  */
 
-import { state, commit } from "./store.js";
+import { state, commit, poolRingsCleared } from "./store.js";
 import { TOTAL_LEVELS } from "./levels.js";
+import { POOL_LEVELS } from "./pool.js";
 
 export const ACHIEVEMENTS = [
   {
@@ -89,6 +90,13 @@ export const ACHIEVEMENTS = [
     name: "Daily Devotee",
     desc: "Keep a 7-day daily-puzzle streak.",
     progress: () => [state.daily.best, 7]
+  },
+  {
+    id: "pool-champion",
+    icon: "🏆",
+    name: "Pool Champion",
+    desc: `Clear all ${POOL_LEVELS} Pool Party rings.`,
+    progress: () => [poolRingsCleared(), POOL_LEVELS]
   },
   {
     id: "rich",

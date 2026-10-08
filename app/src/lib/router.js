@@ -26,15 +26,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export const SCREENS = ["home", "map", "play", "profile", "settings"];
+export const SCREENS = ["home", "map", "pool", "play", "profile", "settings"];
 
 const HOME = { name: "home", params: {} };
 
 /** The screen a back press should reach. Home is the root and has none. */
 export function parentOf(route) {
   if (route.name === "home") return null;
-  // The daily puzzle is launched from home and has no node on the map.
-  if (route.name === "play" && !route.params?.daily) return "map";
+  if (route.name === "play") {
+    // A level belongs to the map it was picked from. The daily puzzle is
+    // launched from home and has no node on either map.
+    if (route.params?.pool) return "pool";
+    if (route.params?.daily) return "home";
+    return "map";
+  }
   return "home";
 }
 

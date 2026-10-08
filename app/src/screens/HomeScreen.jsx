@@ -10,8 +10,9 @@ import ProgressBar from "../components/ProgressBar.jsx";
 import { toast } from "../lib/overlays.js";
 import {
   state, useStoreVersion, playerLevel, rankTitle, nextLevelNumber,
-  starsEarned, starsPossible, dailyDone
+  starsEarned, starsPossible, dailyDone, poolRingsCleared, poolTrophyWon
 } from "../lib/store.js";
+import { POOL_LEVELS, POOL_PRIZE_COINS } from "../lib/pool.js";
 import { levelAt, TOTAL_LEVELS, todayKey } from "../lib/levels.js";
 import { formatNumber } from "../lib/format.js";
 import * as audio from "../lib/audio.js";
@@ -23,6 +24,48 @@ function TileButton({ icon, title, hint, className = "", onClick }) {
       <Icon name={icon} size={24} />
       <b>{title}</b>
       <small>{hint}</small>
+    </button>
+  );
+}
+
+/**
+ * The Pool Party widget: a live event on the main menu.
+ *
+ * It carries its own progress so the player can see where they are without
+ * opening it, and the floats bob even here — the widget is a window onto the
+ * same water.
+ */
+function PoolWidget({ onOpen }) {
+  const cleared = poolRingsCleared();
+  const won = poolTrophyWon();
+
+  return (
+    <button
+      className="pool-card"
+      type="button"
+      aria-label={`Pool Party event, ${cleared} of ${POOL_LEVELS} rings cleared`}
+      onClick={onOpen}
+    >
+      <span className="pool-card-art" aria-hidden="true">
+        <span className="pool-card-ring pool-card-ring--a" />
+        <span className="pool-card-ring pool-card-ring--b" />
+        <span className="pool-card-ring pool-card-ring--c" />
+      </span>
+
+      <span className="pool-card-main">
+        <span className="pool-card-title">
+          Pool Party
+          <em>{won ? "Champion" : "Event"}</em>
+        </span>
+        <small>{won ? "Replay any ring for more stars" : `${POOL_LEVELS} very hard puzzles`}</small>
+        <ProgressBar value={cleared / POOL_LEVELS} thin />
+        <small>{`${cleared} / ${POOL_LEVELS} rings cleared`}</small>
+      </span>
+
+      <span className="pool-card-prize">
+        <span aria-hidden="true">{won ? "🏆" : "🪙"}</span>
+        {won ? "Won" : formatNumber(POOL_PRIZE_COINS)}
+      </span>
     </button>
   );
 }
@@ -116,6 +159,8 @@ export default function HomeScreen({ go }) {
         >
           {playLabel}
         </button>
+
+        <PoolWidget onOpen={tap(() => go("pool"))} />
 
         <div className="home-grid">
           <TileButton
