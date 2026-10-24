@@ -188,22 +188,17 @@ function applyShadow(node, name) {
  */
 function F(o) {
   var f = figma.createFrame();
+  var horizontal = o.dir === 'h';
   f.name = o.name || 'Frame';
-  f.layoutMode = o.dir === 'h' ? 'HORIZONTAL' : 'VERTICAL';
+  f.layoutMode = horizontal ? 'HORIZONTAL' : 'VERTICAL';
   f.itemSpacing = o.gap || 0;
 
   var p = o.pad || [0, 0, 0, 0];
   if (typeof p === 'number') p = [p, p, p, p];
   f.paddingTop = p[0]; f.paddingRight = p[1]; f.paddingBottom = p[2]; f.paddingLeft = p[3];
 
-  f.primaryAxisSizingMode = 'AUTO';
-  f.counterAxisSizingMode = 'AUTO';
   if (o.align) f.counterAxisAlignItems = o.align;      // CENTER | MIN | MAX
   if (o.justify) f.primaryAxisAlignItems = o.justify;  // CENTER | MIN | MAX | SPACE_BETWEEN
-  if (o.wrap) { f.layoutWrap = 'WRAP'; f.counterAxisSpacing = o.wrapGap || o.gap || 0; }
-
-  if (o.w) { f.resize(o.w, f.height || 1); f.primaryAxisSizingMode = o.dir === 'h' ? 'FIXED' : f.primaryAxisSizingMode; f.counterAxisSizingMode = o.dir === 'h' ? f.counterAxisSizingMode : 'FIXED'; }
-  if (o.h) { f.resize(f.width || 1, o.h); if (o.dir === 'h') f.counterAxisSizingMode = 'FIXED'; else f.primaryAxisSizingMode = 'FIXED'; }
 
   f.fills = o.fill ? (Array.isArray(o.fill) ? o.fill : [o.fill]) : [];
   if (o.radius !== undefined) f.cornerRadius = o.radius;
@@ -212,7 +207,29 @@ function F(o) {
   if (o.clip !== undefined) f.clipsContent = o.clip;
   if (o.opacity !== undefined) f.opacity = o.opacity;
 
+  // Children before sizing: an auto-layout frame resolves its hug size from
+  // its contents, so resizing an empty frame and then filling it throws the
+  // explicit size away.
   (o.children || []).forEach(function (c) { if (c) f.appendChild(c); });
+
+  f.primaryAxisSizingMode = 'AUTO';
+  f.counterAxisSizingMode = 'AUTO';
+  if (horizontal) {
+    if (o.w) f.primaryAxisSizingMode = 'FIXED';
+    if (o.h) f.counterAxisSizingMode = 'FIXED';
+  } else {
+    if (o.h) f.primaryAxisSizingMode = 'FIXED';
+    if (o.w) f.counterAxisSizingMode = 'FIXED';
+  }
+  if (o.w || o.h) f.resize(o.w || f.width, o.h || f.height);
+
+  // Wrap needs a fixed primary axis to wrap against and a hugging counter
+  // axis to grow into, so it has to come after the sizing modes above.
+  if (o.wrap && horizontal) {
+    f.layoutWrap = 'WRAP';
+    f.counterAxisSizingMode = 'AUTO';
+    f.counterAxisSpacing = o.wrapGap === undefined ? (o.gap || 0) : o.wrapGap;
+  }
 
   if (o.grow) f.layoutGrow = 1;
   if (o.stretch) f.layoutAlign = 'STRETCH';
@@ -318,8 +335,17 @@ function buildVariables() {
   col.renameMode(lightMode, 'Light');
   var darkMode = col.addMode('Dark');
 
+  // The current API takes the collection; older builds took its id.
+  function newVar(name, collection, type) {
+    try {
+      return figma.variables.createVariable(name, collection, type);
+    } catch (e) {
+      return figma.variables.createVariable(name, collection.id, type);
+    }
+  }
+
   function mk(group, name, lightHex, darkHex) {
-    var v = figma.variables.createVariable(group + '/' + name, col, 'COLOR');
+    var v = newVar(group + '/' + name, col, 'COLOR');
     v.setValueForMode(lightMode, hex(lightHex));
     v.setValueForMode(darkMode, hex(darkHex));
     VARS[name] = v;
@@ -334,11 +360,11 @@ function buildVariables() {
   var nums = figma.variables.createVariableCollection('WSJ scale');
   var nm = nums.modes[0].modeId;
   Object.keys(SPACE).forEach(function (k) {
-    var v = figma.variables.createVariable('space/sp-' + k, nums, 'FLOAT');
+    var v = newVar('space/sp-' + k, nums, 'FLOAT');
     v.setValueForMode(nm, SPACE[k]);
   });
   Object.keys(RADIUS).forEach(function (k) {
-    var v = figma.variables.createVariable('radius/' + k, nums, 'FLOAT');
+    var v = newVar('radius/' + k, nums, 'FLOAT');
     v.setValueForMode(nm, RADIUS[k]);
   });
 }
@@ -372,28 +398,6 @@ function buildEffectStyles() {
 /* --------------------------------------------------------------------- */
 
 var COMP = {};
-
-function componentFrom(node, name) {
-  var c = figma.createComponent();
-  c.name = name;
-  c.layoutMode = node.layoutMode;
-  c.itemSpacing = node.itemSpacing;
-  c.paddingTop = node.paddingTop; c.paddingRight = node.paddingRight;
-  c.paddingBottom = node.paddingBottom; c.paddingLeft = node.paddingLeft;
-  c.counterAxisAlignItems = node.counterAxisAlignItems;
-  c.primaryAxisAlignItems = node.primaryAxisAlignItems;
-  c.fills = node.fills;
-  c.cornerRadius = node.cornerRadius;
-  c.effects = node.effects;
-  c.strokes = node.strokes;
-  c.strokeWeight = node.strokeWeight;
-  c.resize(node.width, node.height);
-  c.primaryAxisSizingMode = node.primaryAxisSizingMode;
-  c.counterAxisSizingMode = node.counterAxisSizingMode;
-  while (node.children.length) c.appendChild(node.children[0]);
-  node.remove();
-  return c;
-}
 
 function button(label, variant) {
   var isPrimary = variant === 'primary';
@@ -733,6 +737,685 @@ function screenHome() {
   ]);
 }
 
+/* -- shared screen parts ------------------------------------------------ */
+
+/** Back button, centred title, optional trailing slot. */
+function topBar(title, subtitle, trailing) {
+  var mid = F({
+    name: 'Title', dir: 'v', gap: 0, grow: true, align: 'CENTER',
+    children: [T(title, 'Heading/Screen', 'ink', { align: 'CENTER' })]
+        .concat(subtitle ? [T(subtitle, 'Body/Meta', 'ink-muted', { align: 'CENTER' })] : [])
+  });
+  return F({
+    name: 'Top bar', dir: 'h', gap: 8, w: 358, align: 'CENTER', pad: [0, 0, 12, 0],
+    children: [
+      iconButton('Back', 44, 'back'),
+      mid,
+      trailing || F({ name: 'Spacer', dir: 'h', w: 44, h: 44, children: [] })
+    ]
+  });
+}
+
+function sectionTitle(text) {
+  return T(text, 'Label/Section', 'ink-muted', { upper: true });
+}
+
+/** A settings row. kind: 'toggle-on' | 'toggle-off' | 'chevron' | 'static' | 'segment' */
+function settingsRow(label, hint, kind, danger) {
+  var trailing;
+  if (kind === 'toggle-on') trailing = toggle(true);
+  else if (kind === 'toggle-off') trailing = toggle(false);
+  else if (kind === 'chevron') trailing = T('›', 'Heading/Sheet', 'ink-muted');
+  else if (kind === 'segment') trailing = segment(['Auto', 'Light', 'Dark'], 0);
+  else trailing = F({ name: 'Spacer', dir: 'h', w: 1, h: 1, children: [] });
+
+  return F({
+    name: 'Settings row / ' + label, dir: 'h', gap: 12, pad: [12, 16, 12, 16], w: 358, align: 'CENTER',
+    fill: tok('surface'),
+    children: [
+      F({ name: 'Text', dir: 'v', gap: 2, grow: true, children: [
+        T(label, 'Label/Row title', danger ? '#c23c3c' : 'ink'),
+        T(hint, 'Body/Row hint', 'ink-muted', { w: 230 })
+      ] }),
+      trailing
+    ]
+  });
+}
+
+/** Rows stacked with a 1px gap, so the group's fill shows through as dividers. */
+function settingsGroup(rows) {
+  return F({
+    name: 'Settings group', dir: 'v', gap: 1, w: 358, radius: RADIUS.lg, clip: true,
+    fill: tok('line'), shadow: 'Elevation/sm', children: rows
+  });
+}
+
+/** The scrim-and-card overlay used by pause, win and the champion screen. */
+function overlay(cardChildren, name) {
+  var card = F({
+    name: 'Overlay card', dir: 'v', gap: 0, pad: 22, w: 346, radius: RADIUS.xl, align: 'CENTER',
+    fill: tok('surface'), shadow: 'Elevation/xl', children: cardChildren
+  });
+  return F({
+    name: name || 'Overlay', dir: 'v', w: 390, h: 844, pad: 22, align: 'CENTER', justify: 'CENTER',
+    fill: solid('#19243a', 0.52), children: [card]
+  });
+}
+
+function statTile(value, label) {
+  return F({
+    name: 'Stat / ' + label, dir: 'v', gap: 2, pad: 12, w: 113, radius: RADIUS.md,
+    fill: solid('#ffffff', 0.82), shadow: 'Elevation/sm',
+    children: [T(value, 'Numeric/Stat', 'ink'), T(label, 'Label/Stat', 'ink-muted', { upper: true })]
+  });
+}
+
+function badgeRow(iconChar, name, desc, unlocked, have, need) {
+  var meta = [T(name, 'Body/Sub', 'ink'), T(desc, 'Body/Caption', 'ink-muted', { w: 240 })];
+  if (!unlocked) {
+    meta.push(bar(have / need, true, 240));
+    meta.push(T(have + ' / ' + need, 'Body/Caption', 'ink-muted'));
+  }
+  var f = F({
+    name: 'Badge / ' + name, dir: 'h', gap: 12, pad: 12, w: 358, radius: RADIUS.md, align: 'CENTER',
+    fill: unlocked ? tok('surface-2') : solid('#ffffff', 0.82), shadow: 'Elevation/sm',
+    stroke: unlocked ? tok('sand-500') : null, strokeW: unlocked ? 2 : 0,
+    children: [
+      F({ name: 'Icon', dir: 'h', w: 44, h: 44, radius: RADIUS.sm, align: 'CENTER', justify: 'CENTER',
+        fill: unlocked ? tok('sand-100') : tok('surface-sunk'),
+        children: [T(unlocked ? iconChar : '🔒', 'Heading/Sheet', 'ink')] }),
+      F({ name: 'Meta', dir: 'v', gap: 3, grow: true, children: meta })
+    ]
+  });
+  if (!unlocked) f.opacity = 0.72;
+  return f;
+}
+
+function chapterBanner(iconChar, name, blurb, pct, score, total, locked) {
+  var f = F({
+    name: 'Chapter / ' + name, dir: 'h', gap: 12, pad: 12, w: 358, radius: RADIUS.lg, align: 'CENTER',
+    fill: solid('#ffffff', 0.82), shadow: 'Elevation/sm',
+    children: [
+      F({ name: 'Icon', dir: 'h', w: 44, h: 44, radius: RADIUS.md, align: 'CENTER', justify: 'CENTER',
+        fill: tok('surface-2'), shadow: 'Elevation/sm', children: [T(iconChar, 'Heading/Sheet', 'ink')] }),
+      F({ name: 'Meta', dir: 'v', gap: 4, grow: true, children: [
+        T(name, 'Label/Row title', 'ink'),
+        T(blurb, 'Body/Caption', 'ink-muted', { w: 210 }),
+        bar(pct, false, 210)
+      ] }),
+      F({ name: 'Score', dir: 'v', gap: 0, align: 'CENTER', children: [
+        T(String(score), 'Heading/Play title', '#b07d08'),
+        T('/ ' + total, 'Label/Stat', 'ink-muted')
+      ] })
+    ]
+  });
+  if (locked) f.opacity = 0.55;
+  return f;
+}
+
+/** A swim ring: a thick-stroked circle, so the pool shows through the hole. */
+function ringFloat(size, colorHex, label, labelColor) {
+  var s = size || 86;
+  var r = s * 0.325;
+  var sw = s * 0.315;
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + s + '" height="' + s + '" viewBox="0 0 ' + s + ' ' + s + '">' +
+    '<circle cx="' + (s / 2) + '" cy="' + (s / 2) + '" r="' + r + '" fill="none" stroke="' + colorHex + '" stroke-width="' + sw + '"/></svg>';
+  var ring = figma.createNodeFromSvg(svg);
+  ring.name = 'Float';
+  return F({
+    name: 'Pool ring', dir: 'v', w: s, h: s, align: 'CENTER', justify: 'CENTER',
+    children: [ring].concat(label ? [T(label, 'Numeric/Stat', labelColor || '#ffffff')] : [])
+  });
+}
+
+/** The 8x8 board for level 24, with the words the artboards show. */
+var BOARD_LETTERS = (
+  'GALPINET' + 'LSUMMITP' + 'ACAIRNSE' + 'CROTVKHA' +
+  'INILBSMK' + 'ETRDYCFO' + 'RVHNGWDL' + 'BKSTREJZ'
+).split('');
+
+var BOARD_FOUND = [0, 8, 16, 24, 32, 40, 48, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21];
+var BOARD_ACTIVE = [15, 23, 31];
+var BOARD_ALL_FOUND = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 0, 8, 16, 24, 32, 40, 48,
+  17, 18, 19, 20, 21, 15, 23, 31, 39, 25, 34, 43, 52, 61];
+
+function board(foundIdx, activeIdx) {
+  var found = {}, active = {};
+  (foundIdx || []).forEach(function (i) { found[i] = true; });
+  (activeIdx || []).forEach(function (i) { active[i] = true; });
+
+  var rows = [];
+  for (var r = 0; r < 8; r++) {
+    var cells = [];
+    for (var c = 0; c < 8; c++) {
+      var i = r * 8 + c;
+      cells.push(boardTile(BOARD_LETTERS[i], active[i] ? 'active' : found[i] ? 'found' : ''));
+    }
+    rows.push(F({ name: 'Row ' + (r + 1), dir: 'h', gap: 4, children: cells }));
+  }
+  return F({
+    name: 'Board', dir: 'v', gap: 4, pad: 8, w: 358, h: 358, radius: RADIUS.lg,
+    align: 'CENTER', justify: 'CENTER', fill: tok('surface'), shadow: 'Elevation/lg',
+    children: rows
+  });
+}
+
+function wordList(foundWords) {
+  var defs = [['PEAK', 0], ['SUMMIT', 1], ['GLACIER', 2], ['RIDGE', 3], ['ALPINE', 4], ['CAIRN', 5]];
+  return F({
+    name: 'Word list', dir: 'h', gap: 6, w: 358, wrap: true, justify: 'CENTER', align: 'CENTER',
+    children: defs.map(function (d) {
+      return wordPill(d[0], WORDS.light[d[1]], foundWords.indexOf(d[0]) !== -1);
+    })
+  });
+}
+
+function playFoot(pct, label, disabled) {
+  var hint = F({
+    name: 'Hint button', dir: 'h', gap: 7, pad: [0, 16, 0, 16], h: 44, radius: RADIUS.md, align: 'CENTER',
+    fill: tok('sand-500'), shadow: 'Elevation/sm',
+    children: [
+      icon('bulb', 20, '#4a3100'),
+      T('Hint', 'Label/Row title', '#4a3100'),
+      F({ name: 'Cost', dir: 'h', pad: [2, 8, 2, 8], radius: RADIUS.pill, fill: solid('#000000', 0.14),
+        children: [T('🪙25', 'Body/Meta', '#4a3100')] })
+    ]
+  });
+  if (disabled) hint.opacity = 0.5;
+  return F({
+    name: 'Bottom bar', dir: 'h', gap: 12, pad: [8, 12, 8, 12], w: 358, radius: RADIUS.lg, align: 'CENTER',
+    fill: solid('#ffffff', 0.82), shadow: 'Elevation/sm',
+    children: [
+      F({ name: 'Progress', dir: 'v', gap: 5, grow: true, children: [
+        bar(pct, false, 200), T(label, 'Body/Meta', 'ink-soft')
+      ] }),
+      hint
+    ]
+  });
+}
+
+function playHud(timer) {
+  return F({
+    name: 'HUD', dir: 'h', gap: 8, w: 358, align: 'CENTER', pad: [0, 0, 12, 0],
+    children: [
+      iconButton('Pause', 44, 'pause'),
+      F({ name: 'Title', dir: 'v', gap: 0, grow: true, align: 'CENTER', children: [
+        T('Mountain Pass 8', 'Heading/Play title', 'ink', { align: 'CENTER' }),
+        T('⛰️ Level 24 of 80', 'Body/Meta', 'ink-muted', { align: 'CENTER' })
+      ] }),
+      F({ name: 'Timer', dir: 'h', w: 56, h: 32, radius: RADIUS.pill, align: 'CENTER', justify: 'CENTER',
+        fill: solid('#ffffff', 0.82), shadow: 'Elevation/sm',
+        children: [T(timer, 'Numeric/Timer', 'ink')] })
+    ]
+  });
+}
+
+/**
+ * One item on a winding trail. Auto-layout ignores a child's x, so the lean
+ * is expressed as left padding on a full-width row instead.
+ */
+function leanRow(node, itemWidth, offset) {
+  var left = Math.max(0, Math.round((358 - itemWidth) / 2 + offset));
+  return F({
+    name: 'Trail row', dir: 'h', w: 358, pad: [0, 0, 0, left], justify: 'MIN', align: 'CENTER',
+    children: [node]
+  });
+}
+
+/* -- screens ------------------------------------------------------------ */
+
+function screenMap() {
+  // Highest level first, so level 17 lands at the bottom; nodes lean
+  // alternately 58px off the spine, as .node does in screens.css.
+  var levels = [[24, 'next', 0], [23, 'done', 3], [22, 'done', 2], [21, 'done', 3],
+                [20, 'done', 2], [19, 'done', 3], [18, 'done', 1], [17, 'done', 3]];
+  var trail = F({
+    name: 'Chapter trail', dir: 'v', gap: 8, w: 358, pad: [16, 0, 16, 0],
+    children: levels.map(function (l, i) {
+      return leanRow(levelNode(l[0], l[1], l[2]), 62, i % 2 === 0 ? 58 : -58);
+    })
+  });
+
+  return phone('Journey map', [
+    topBar('Journey', 'Tap a level to play', chip('⭐ 51', 'ink')),
+    F({ name: 'Body', dir: 'v', gap: 22, w: 358, grow: true, clip: true, children: [
+      chapterBanner('🌆', 'City Lights', 'Locked — keep going to reach it', 0, 0, 24, true),
+      trail,
+      chapterBanner('⛰️', 'Mountain Pass', 'Thin air, wide views.', 0.71, 17, 24, false)
+    ] })
+  ]);
+}
+
+function screenPool() {
+  var prize = F({
+    name: 'Grand prize', dir: 'h', gap: 12, pad: 12, w: 358, radius: RADIUS.lg, align: 'CENTER',
+    fill: grad(135, [['#ffe08a', 0], ['#f6c453', 1]]), shadow: 'Elevation/md',
+    children: [
+      T('🏆', 'Display/Home title', '#4a3100'),
+      F({ name: 'Meta', dir: 'v', gap: 0, grow: true, children: [
+        T('Grand prize', 'Label/Row title', '#4a3100'),
+        T('Clear all 10 rings', 'Body/Row hint', '#6b4a06')
+      ] }),
+      chip('🪙 1,000', '#8a5a00')
+    ]
+  });
+
+  // leanFor(index) from pool.js — round(sin(index * 1.15) * 100) / 100 — times 60px.
+  var rings = [
+    [106, '#ffc93c', '🔒', '#ffffff', -53],
+    [106, '#9be36b', '', null, -48],
+    [106, '#4fd1c5', '8', '#0d8676', 13],
+    [106, '#ff6b6b', '7', '#0d8676', 39]
+  ];
+  var floats = F({
+    name: 'Pool trail', dir: 'v', gap: 22, w: 358, pad: [12, 0, 16, 0],
+    children: rings.map(function (r) {
+      return leanRow(ringFloat(r[0], r[1], r[2], r[3]), r[0], r[4]);
+    })
+  });
+
+  return phone('Pool Party', [
+    topBar('Pool Party', '10 very hard puzzles', chip('🛟 8/10', 'ink')),
+    F({ name: 'Progress', dir: 'v', gap: 5, pad: [8, 12, 8, 12], w: 358, radius: RADIUS.md,
+      fill: solid('#ffffff', 0.82), shadow: 'Elevation/sm', children: [
+        bar(0.8, false, 334),
+        T('19 / 30 stars', 'Body/Caption', 'ink-muted', { upper: true })
+      ] }),
+    F({ name: 'Spacer', dir: 'v', h: 12, w: 358, children: [] }),
+    F({ name: 'Body', dir: 'v', gap: 16, w: 358, grow: true, clip: true, children: [prize, floats] })
+  ], grad(180, [['#63c8e4', 0], ['#4fc0e4', 0.34], ['#2e9fd0', 0.72], ['#12699c', 1]]));
+}
+
+function screenPlay() {
+  return phone('Puzzle', [
+    playHud('1:42'),
+    F({ name: 'Body', dir: 'v', gap: 12, w: 358, grow: true, align: 'CENTER', children: [
+      wordList(['SUMMIT', 'GLACIER', 'CAIRN']),
+      board(BOARD_FOUND, BOARD_ACTIVE)
+    ] }),
+    F({ name: 'Spacer', dir: 'v', h: 12, w: 358, children: [] }),
+    playFoot(0.5, '3 of 6 found', false)
+  ]);
+}
+
+/** Lay a modal over a finished phone frame. */
+function withOverlay(phoneFrame, overlayFrame) {
+  phoneFrame.appendChild(overlayFrame);
+  overlayFrame.layoutPositioning = 'ABSOLUTE';
+  overlayFrame.x = 0;
+  overlayFrame.y = 0;
+  return phoneFrame;
+}
+
+/** Profile and Settings scroll, so their frames are drawn at content height. */
+function tallPhone(name, children, height) {
+  return F({
+    name: name, dir: 'v', gap: 0, pad: [16, 16, 30, 16], w: 390, h: height,
+    fill: grad(180, [['#9de7ec', 0], ['#d9f6eb', 0.3], ['#fff1c7', 1]]),
+    clip: true, children: children
+  });
+}
+
+function screenHomeNew() {
+  var f = screenHome();
+  f.name = 'Home — first run';
+  // Same layout, first-run numbers.
+  var swap = {
+    'Lv 6 · Pathfinder': 'Lv 1 · Day Tripper',
+    '41 / 70 XP': '0 / 20 XP',
+    '🪙 420': '🪙 120',
+    '🔥 3': '🔥 0',
+    '23 of 80 levels explored': 'Ten chapters. Eighty puzzles. One journey.',
+    'Continue · Mountain Pass 7': 'Start journey',
+    '3 / 10 rings cleared': '0 / 10 rings cleared',
+    '51 / 240 stars collected': '0 / 240 stars collected'
+  };
+  f.findAll(function (n) { return n.type === 'TEXT'; }).forEach(function (t) {
+    if (swap[t.characters]) t.characters = swap[t.characters];
+  });
+  f.findAll(function (n) { return n.name === 'Fill'; }).forEach(function (r) {
+    r.resize(1, r.height); // every bar reads empty on a fresh save
+  });
+  return f;
+}
+
+function screenPlayPaused() {
+  var base = phone('Puzzle — paused', [
+    playHud('1:42'),
+    F({ name: 'Body', dir: 'v', gap: 12, w: 358, grow: true, align: 'CENTER', children: [
+      wordList(['SUMMIT', 'GLACIER', 'CAIRN']), board(BOARD_FOUND, [])
+    ] }),
+    F({ name: 'Spacer', dir: 'v', h: 12, w: 358, children: [] }),
+    playFoot(0.5, '3 of 6 found', false)
+  ]);
+
+  var resume = button('Resume', 'primary-lg'); resume.layoutAlign = 'STRETCH';
+  var restart = button('Restart', 'secondary'); restart.layoutGrow = 1;
+  var settings = button('Settings', 'secondary'); settings.layoutGrow = 1;
+  var quit = button('Quit to map', 'ghost'); quit.layoutAlign = 'STRETCH';
+
+  return withOverlay(base, overlay([
+    T('Paused', 'Heading/Overlay', 'ink', { align: 'CENTER' }),
+    T('Take your time — the clock is stopped.', 'Body/Sub', 'ink-muted', { align: 'CENTER' }),
+    F({ name: 'Spacer', dir: 'v', h: 16, w: 10, children: [] }),
+    F({ name: 'Actions', dir: 'v', gap: 8, w: 302, children: [
+      resume,
+      F({ dir: 'h', gap: 8, w: 302, children: [restart, settings] }),
+      quit
+    ] })
+  ], 'Pause overlay'));
+}
+
+function screenPlayWin() {
+  var base = phone('Puzzle — level complete', [
+    playHud('1:58'),
+    F({ name: 'Body', dir: 'v', gap: 12, w: 358, grow: true, align: 'CENTER', children: [
+      wordList(['PEAK', 'SUMMIT', 'GLACIER', 'RIDGE', 'ALPINE', 'CAIRN']),
+      board(BOARD_ALL_FOUND, [])
+    ] }),
+    F({ name: 'Spacer', dir: 'v', h: 12, w: 358, children: [] }),
+    playFoot(1, '6 of 6 found', true)
+  ]);
+
+  // The middle star is bigger and sits a little high.
+  var burst = F({ name: 'Star burst', dir: 'h', gap: 12, align: 'MIN', children: [
+    star(52, '#f6c453'), star(64, '#f6c453'), star(52, '#f6c453')
+  ] });
+
+  function reward(value, label) {
+    return F({ name: 'Reward / ' + label, dir: 'v', gap: 2, align: 'CENTER', children: [
+      T(value, 'Heading/Sheet', 'ink'), T(label, 'Label/Stat', 'ink-muted', { upper: true })
+    ] });
+  }
+
+  var next = button('Next level', 'primary-lg'); next.layoutAlign = 'STRETCH';
+  var replay = button('Replay', 'secondary'); replay.layoutGrow = 1;
+  var toMap = button('Map', 'secondary'); toMap.layoutGrow = 1;
+
+  return withOverlay(base, overlay([
+    T('Perfect!', 'Heading/Overlay', 'ink', { align: 'CENTER' }),
+    T('Mountain Pass complete!', 'Body/Sub', 'ink-muted', { align: 'CENTER' }),
+    F({ name: 'Spacer', dir: 'v', h: 12, w: 10, children: [] }),
+    burst,
+    F({ name: 'Spacer', dir: 'v', h: 16, w: 10, children: [] }),
+    F({ name: 'Rewards', dir: 'h', gap: 22, justify: 'CENTER', children: [
+      reward('+120', 'Coins'), reward('+60', 'XP'), reward('1:58', 'Time')
+    ] }),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 10, children: [] }),
+    F({ name: 'Actions', dir: 'v', gap: 8, w: 302, children: [
+      next, F({ dir: 'h', gap: 8, w: 302, children: [replay, toMap] })
+    ] })
+  ], 'Win overlay'));
+}
+
+function screenPoolChampion() {
+  var base = phone('Pool Party — champion', [
+    topBar('Pool Party', '10 very hard puzzles', chip('🏆 10/10', 'ink')),
+    F({ name: 'Body', dir: 'v', gap: 22, w: 358, grow: true, clip: true, children: [
+      leanRow(ringFloat(106, '#ffc93c', '', null), 106, -53),
+      leanRow(ringFloat(106, '#9be36b', '', null), 106, -48)
+    ] })
+  ], grad(180, [['#63c8e4', 0], ['#4fc0e4', 0.34], ['#2e9fd0', 0.72], ['#12699c', 1]]));
+
+  function reward(value, label) {
+    return F({ name: 'Reward / ' + label, dir: 'v', gap: 2, align: 'CENTER', children: [
+      T(value, 'Heading/Sheet', 'ink'), T(label, 'Label/Stat', 'ink-muted', { upper: true })
+    ] });
+  }
+  var collect = button('Collect the prize', 'primary-lg'); collect.layoutAlign = 'STRETCH';
+
+  return withOverlay(base, overlay([
+    T('🏆', 'Display/Home title', 'ink', { align: 'CENTER' }),
+    T('Pool Party Champion!', 'Heading/Overlay', 'ink', { align: 'CENTER' }),
+    T('All 10 rings cleared — the hardest boards in the game.', 'Body/Sub', 'ink-muted', { w: 280, align: 'CENTER' }),
+    F({ name: 'Spacer', dir: 'v', h: 16, w: 10, children: [] }),
+    F({ name: 'Rewards', dir: 'h', gap: 22, justify: 'CENTER', children: [
+      reward('1,000', 'Coins'), reward('400', 'XP'), reward('🏆', 'Trophy')
+    ] }),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 10, children: [] }),
+    F({ name: 'Actions', dir: 'v', gap: 8, w: 302, children: [collect] })
+  ], 'Champion overlay'));
+}
+
+function screenProfile() {
+  var avatars = ['🧭', '⛵', '🦜', '🐬', '🦊', '🌵', '🚀', '🐧', '🦉', '🐙', '🍉', '🌴', '🐢', '🦩', '🏔️', '🎒'];
+  var avatarRows = [];
+  for (var i = 0; i < avatars.length; i += 6) {
+    avatarRows.push(F({
+      name: 'Avatar row', dir: 'h', gap: 8,
+      children: avatars.slice(i, i + 6).map(function (a, j) {
+        var on = (i === 0 && j === 0);
+        return F({
+          name: 'Avatar option', dir: 'h', w: 53, h: 53, radius: RADIUS.md, align: 'CENTER', justify: 'CENTER',
+          fill: on ? tok('surface-2') : solid('#ffffff', 0.82),
+          shadow: on ? 'Elevation/md' : 'Elevation/sm',
+          stroke: on ? tok('good') : null, strokeW: on ? 3 : 0,
+          children: [T(a, 'Heading/Sheet', 'ink')]
+        });
+      })
+    }));
+  }
+
+  var statPairs = [['23/80', 'Levels done'], ['51/240', 'Stars'], ['168', 'Words found'],
+    ['11', '3-star levels'], ['0:43', 'Best level time'], ['134:12', 'Time played'],
+    ['9', 'Hints used'], ['1,140', 'Coins earned'], ['3d', 'Daily streak'], ['5d', 'Best streak']];
+  var statRows = [];
+  for (var s = 0; s < statPairs.length; s += 3) {
+    statRows.push(F({ name: 'Stat row', dir: 'h', gap: 8,
+      children: statPairs.slice(s, s + 3).map(function (p) { return statTile(p[0], p[1]); }) }));
+  }
+
+  var badges = [
+    ['🌱', 'First Steps', 'Finish your first level.', true, 1, 1],
+    ['🥾', 'Word Wanderer', 'Finish 10 levels.', true, 10, 10],
+    ['🧭', 'Trailblazer', 'Finish 25 levels.', false, 23, 25],
+    ['🗺️', 'Pathfinder', 'Finish 50 levels.', false, 23, 50],
+    ['👑', 'Journey Master', 'Finish all 80 levels.', false, 23, 80],
+    ['⭐', 'Perfectionist', 'Earn 3 stars on 10 levels.', true, 10, 10],
+    ['🌟', 'Star Collector', 'Earn 3 stars on 30 levels.', false, 11, 30],
+    ['🎯', 'Dead Eye', 'Finish 5 levels with no wrong selections.', true, 5, 5],
+    ['⚡', 'Speed Reader', 'Finish any level in under 45 seconds.', true, 1, 1],
+    ['🦅', 'Eagle Eye', 'Find 250 words in total.', false, 168, 250],
+    ['🔥', 'Daily Devotee', 'Keep a 7-day daily-puzzle streak.', false, 5, 7],
+    ['🏆', 'Pool Champion', 'Clear all 10 Pool Party rings.', false, 8, 10],
+    ['💰', 'Coin Hoarder', 'Earn 1,000 coins in total.', true, 1000, 1000]
+  ];
+
+  return tallPhone('Profile (full scroll)', [
+    topBar('Profile', null, null),
+    F({ name: 'Identity', dir: 'v', gap: 8, pad: 16, w: 358, radius: RADIUS.lg, align: 'CENTER',
+      fill: tok('surface'), shadow: 'Elevation/md', children: [
+        F({ name: 'Avatar', dir: 'h', w: 82, h: 82, radius: RADIUS.lg, align: 'CENTER', justify: 'CENTER',
+          fill: grad(160, [['#c6f0f3', 0], ['#fff6dd', 1]]), shadow: 'Elevation/md',
+          children: [T('🧭', 'Display/Home title', 'ink')] }),
+        F({ name: 'Name field', dir: 'h', w: 260, h: 44, radius: RADIUS.md, align: 'CENTER', justify: 'CENTER',
+          stroke: tok('line'), strokeW: 2, children: [T('Traveller', 'Label/CTA', 'ink')] }),
+        T('Level 6 · Pathfinder', 'Label/Chip', 'ink-muted'),
+        bar(0.58, false, 260),
+        T('41 / 70 XP to level 7', 'Body/Caption', 'ink-muted')
+      ] }),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 358, children: [] }),
+    sectionTitle('Avatar'),
+    F({ name: 'Avatar grid', dir: 'v', gap: 8, w: 358, pad: [8, 0, 0, 0], children: avatarRows }),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 358, children: [] }),
+    sectionTitle('Stats'),
+    F({ name: 'Stat grid', dir: 'v', gap: 8, w: 358, pad: [8, 0, 0, 0], children: statRows }),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 358, children: [] }),
+    sectionTitle('Achievements  6 / 13'),
+    F({ name: 'Badge list', dir: 'v', gap: 8, w: 358, pad: [8, 0, 0, 0],
+      children: badges.map(function (b) { return badgeRow(b[0], b[1], b[2], b[3], b[4], b[5]); }) })
+  ], 2000);
+}
+
+function screenSettings() {
+  return tallPhone('Settings (full scroll)', [
+    topBar('Settings', null, null),
+    sectionTitle('Sound'),
+    F({ name: 'Spacer', dir: 'v', h: 8, w: 358, children: [] }),
+    settingsGroup([
+      settingsRow('Sound effects', 'Taps, finds and fanfares', 'toggle-on'),
+      settingsRow('Background music', 'A quiet generative loop', 'toggle-off'),
+      settingsRow('Vibration', 'Where the device supports it', 'toggle-on')
+    ]),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 358, children: [] }),
+    sectionTitle('Display'),
+    F({ name: 'Spacer', dir: 'v', h: 8, w: 358, children: [] }),
+    settingsGroup([
+      settingsRow('Theme', 'Auto follows your device', 'segment'),
+      settingsRow('Colour-blind palette', 'High-separation word colours', 'toggle-off'),
+      settingsRow('High contrast', 'Stronger tile outlines', 'toggle-off'),
+      settingsRow('Reduce motion', 'Fewer animations and no confetti', 'toggle-off')
+    ]),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 358, children: [] }),
+    sectionTitle('Gameplay'),
+    F({ name: 'Spacer', dir: 'v', h: 8, w: 358, children: [] }),
+    settingsGroup([
+      settingsRow('Show timer', 'Hide it for a relaxed run', 'toggle-on'),
+      settingsRow('Idle nudges', 'Free pointer after a long pause', 'toggle-on')
+    ]),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 358, children: [] }),
+    sectionTitle('Data'),
+    F({ name: 'Spacer', dir: 'v', h: 8, w: 358, children: [] }),
+    settingsGroup([
+      settingsRow('Reset progress', 'Clears levels, stars, coins and badges', 'chevron', true)
+    ]),
+    F({ name: 'Spacer', dir: 'v', h: 22, w: 358, children: [] }),
+    sectionTitle('About'),
+    F({ name: 'Spacer', dir: 'v', h: 8, w: 358, children: [] }),
+    settingsGroup([
+      settingsRow('Word Search Journey', 'Plays offline once loaded. Progress is stored on this device only.', 'static'),
+      settingsRow('How to play', 'Controls, stars and hints', 'chevron')
+    ])
+  ], 1180);
+}
+
+function screenSheets() {
+  function sheet(title, bodyNodes, actions) {
+    return F({
+      name: 'Sheet / ' + title, dir: 'v', gap: 0, pad: 22, w: 390, radius: RADIUS.xl,
+      fill: tok('surface'), shadow: 'Elevation/xl',
+      children: [T(title, 'Heading/Sheet', 'ink')]
+        .concat([F({ name: 'Spacer', dir: 'v', h: 8, w: 10, children: [] })])
+        .concat(bodyNodes)
+        .concat([F({ name: 'Spacer', dir: 'v', h: 16, w: 10, children: [] })])
+        .concat([F({ name: 'Actions', dir: 'v', gap: 8, w: 346, children: actions })])
+    });
+  }
+
+  function howtoRow(glyph, text) {
+    return F({ name: 'How-to row', dir: 'h', gap: 12, w: 346, align: 'MIN', children: [
+      F({ name: 'Glyph', dir: 'h', w: 36, h: 36, radius: RADIUS.sm, align: 'CENTER', justify: 'CENTER',
+        fill: tok('surface-sunk'), children: [T(glyph, 'Label/Button', 'ink')] }),
+      T(text, 'Body/Sheet', 'ink-soft', { w: 292 })
+    ] });
+  }
+
+  function toast(text, kind) {
+    return F({
+      name: 'Toast / ' + kind, dir: 'h', pad: [10, 16, 10, 16], radius: RADIUS.pill,
+      fill: kind === 'good' ? tok('teal-600') : kind === 'bad' ? tok('coral-600') : tok('ink'),
+      shadow: 'Elevation/lg', children: [T(text, 'Numeric/Timer', '#ffffff')]
+    });
+  }
+
+  var gotIt = button('Got it', 'primary'); gotIt.layoutAlign = 'STRETCH';
+  var reset = button('Reset progress', 'secondary'); reset.layoutAlign = 'STRETCH';
+  var keep = button('Keep my journey', 'primary'); keep.layoutAlign = 'STRETCH';
+
+  var installBar = F({
+    name: 'Install prompt', dir: 'h', gap: 8, pad: 12, w: 390, radius: RADIUS.lg, align: 'CENTER',
+    fill: tok('surface'), shadow: 'Elevation/xl', children: [
+      F({ name: 'Text', dir: 'v', gap: 0, grow: true, children: [
+        T('Add to home screen', 'Body/Meta', 'ink'),
+        T('Play offline, full screen', 'Body/Caption', 'ink-muted')
+      ] }),
+      F({ name: 'Install', dir: 'h', h: 38, pad: [0, 14, 0, 14], radius: RADIUS.sm, align: 'CENTER', justify: 'CENTER',
+        fill: tok('accent'), children: [T('Install', 'Body/Meta', '#ffffff')] }),
+      F({ name: 'Dismiss', dir: 'h', h: 38, pad: [0, 8, 0, 8], align: 'CENTER', justify: 'CENTER',
+        children: [T('Not now', 'Body/Meta', 'ink-muted')] })
+    ]
+  });
+
+  var boot = F({
+    name: 'Boot splash', dir: 'v', gap: 16, w: 390, h: 260, radius: RADIUS.xl, align: 'CENTER', justify: 'CENTER',
+    fill: grad(180, [['#9de7ec', 0], ['#d9f6eb', 0.46], ['#fff1c7', 1]]), children: [
+      F({ name: 'App mark', dir: 'h', w: 84, h: 84, radius: RADIUS.lg, align: 'CENTER', justify: 'CENTER',
+        fill: grad(135, [['#2364aa', 0], ['#2364aa', 0.36], ['#18a999', 0.36], ['#18a999', 0.64], ['#ffe08a', 0.64]]),
+        shadow: 'Elevation/lg', children: [T('W', 'Display/Home title', '#ffffff')] }),
+      T('Word Search Journey', 'Body/Sub', 'ink-soft')
+    ]
+  });
+
+  function col(title, nodes) {
+    return F({ name: title, dir: 'v', gap: 12, align: 'MIN',
+      children: [sectionTitle(title)].concat(nodes) });
+  }
+
+  return F({
+    name: 'Sheet, toasts, install, boot', dir: 'h', gap: 40, pad: 40, align: 'MIN',
+    fill: tok('sky-100'), children: [
+      F({ dir: 'v', gap: 40, align: 'MIN', children: [
+        col('Modal sheet — informational', [sheet('How to play', [
+          F({ dir: 'v', gap: 12, w: 346, children: [
+            howtoRow('👆', 'Drag across a run of letters to pick a word. Words read in any of eight directions, forwards or backwards.'),
+            howtoRow('⌨️', 'On a keyboard: arrow keys move, Enter starts and finishes a word, Escape cancels.'),
+            howtoRow('⭐', 'Three stars means no hints and inside the par time. Replay any level to improve it.'),
+            howtoRow('💡', 'A hint costs 25 coins and lights up the first two letters of a word you have not found.')
+          ] })
+        ], [gotIt])]),
+        col('Modal sheet — destructive confirm', [sheet('Reset everything?', [
+          T('Your levels, stars, coins, streak and badges will be erased. Your settings stay as they are. This cannot be undone.',
+            'Body/Sheet', 'ink-soft', { w: 346 })
+        ], [reset, keep])])
+      ] }),
+      F({ dir: 'v', gap: 40, align: 'MIN', children: [
+        col('Toasts', [F({ dir: 'v', gap: 8, align: 'MIN', children: [
+          toast("Today's puzzle is done — come back tomorrow", 'neutral'),
+          toast('🏆 Pool Champion', 'good'),
+          toast('That level is still locked', 'bad')
+        ] })]),
+        col('Install prompt', [installBar]),
+        col('Boot splash', [boot])
+      ] })
+    ]
+  });
+}
+
+/** A visible swatch sheet; the Variables panel is the authoritative one. */
+function tokenSheet() {
+  function swatchRow(label, hexVal) {
+    return F({ name: label, dir: 'h', gap: 9, align: 'CENTER', children: [
+      R({ name: 'Swatch', w: 38, h: 24, radius: 7, fill: solid(hexVal) }),
+      T(label, 'Body/Meta', 'ink', { w: 110 }),
+      T(hexVal, 'Body/Caption', 'ink-muted')
+    ] });
+  }
+  function colOf(title, entries) {
+    return F({ name: title, dir: 'v', gap: 6, align: 'MIN',
+      children: [sectionTitle(title), F({ dir: 'v', gap: 6, children: entries })] });
+  }
+
+  var brandRows = Object.keys(BRAND).map(function (k) { return swatchRow(k, BRAND[k]); });
+  var lightRows = Object.keys(LIGHT).map(function (k) { return swatchRow(k, LIGHT[k]); });
+  var darkRows = Object.keys(DARK).map(function (k) { return swatchRow(k, DARK[k]); });
+  var wordRows = ['light', 'dark', 'cvd'].map(function (p) {
+    return F({ name: 'Word palette / ' + p, dir: 'v', gap: 5, align: 'MIN', children: [
+      T(p === 'cvd' ? 'Colour-blind' : p, 'Body/Caption', 'ink-muted'),
+      F({ dir: 'h', gap: 5, children: WORDS[p].map(function (h) { return R({ name: h, w: 30, h: 30, radius: 7, fill: solid(h) }); }) })
+    ] });
+  });
+
+  return F({
+    name: 'Design tokens', dir: 'h', gap: 28, pad: 40, align: 'MIN', fill: tok('surface'),
+    children: [
+      colOf('Brand ramp', brandRows),
+      colOf('Semantic — light', lightRows),
+      colOf('Semantic — dark', darkRows),
+      colOf('Word highlight palette', wordRows)
+    ]
+  });
+}
+
 /* --------------------------------------------------------------------- */
 /* Run                                                                     */
 /* --------------------------------------------------------------------- */
@@ -753,17 +1436,38 @@ async function main() {
 
   var made = [];
 
-  var lib = buildComponentLibrary(0, 0);
+  // Band one: the reference sheets.
+  var tokens = tokenSheet();
+  tokens.x = 0; tokens.y = 0;
+  made.push(tokens);
+
+  var lib = buildComponentLibrary(tokens.width + 120, 0);
   made.push(lib);
 
-  var home = screenHome();
-  home.x = lib.x + lib.width + 120;
-  home.y = 0;
-  made.push(home);
+  var bandTwo = Math.max(tokens.height, lib.height) + 160;
+
+  // Band two: the screens, in the order a player meets them.
+  var screens = [
+    screenHome(), screenHomeNew(), screenMap(), screenPool(), screenPlay(),
+    screenPlayPaused(), screenPlayWin(), screenPoolChampion(),
+    screenProfile(), screenSettings()
+  ];
+  var x = 0;
+  screens.forEach(function (s) {
+    s.x = x; s.y = bandTwo;
+    x += s.width + 80;
+    made.push(s);
+  });
+
+  // Band three: overlays and chrome that are not a screen of their own.
+  var sheets = screenSheets();
+  sheets.x = 0;
+  sheets.y = bandTwo + 2000 + 160;
+  made.push(sheets);
 
   figma.currentPage.selection = made;
   figma.viewport.scrollAndZoomIntoView(made);
-  figma.closePlugin('Built foundations, the component library and the Home screen.');
+  figma.closePlugin('Built ' + screens.length + ' screens, the component library, the token sheet and the overlay board.');
 }
 
 main();
