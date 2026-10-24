@@ -1,0 +1,11 @@
+{
+  "name": "Word Search Journey — build design file",
+  "id": "wsj-design-file-builder",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "reasoning": "Everything the plugin draws is baked into code.js. It makes no network requests."
+  }
+}
